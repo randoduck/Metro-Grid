@@ -140,6 +140,7 @@ $("addform").addEventListener("submit", async (e) => {
   $("toast").hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { $("toast").hidden = true; }, 9000);
 });
 document.addEventListener("mg-user", renderInbox);
+if (!LIVE.A) $("foot1").hidden = false;
 if (!LIVE.A) $("foot1").textContent = `The model couldn't start in this browser (${LOADERR || "unknown reason"}), so you're seeing our notebook's saved results instead. Try reloading the page or using Chrome. Adding a train needs the model, so that button is off for now.`;
 if (!LIVE.A) { $("addbtn").disabled = true; $("addbtn").title = "The model could not start in this browser"; }
 }

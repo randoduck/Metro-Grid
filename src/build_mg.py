@@ -442,12 +442,12 @@ COPY = [
     ("The three physics features furthest from this train's healthy baseline right now. During a watch or alarm, their parts light up on the diagram.",
      "The three measurements furthest from normal for this train right now. During a watch or alarm, the matching parts light up on the drawing."),
     ("Four real failures cannot show how small a leak each detector can catch, so the notebook stretched real operating episodes in 12 healthy 24-hour windows to mimic a leak of known size. This was used for testing only, never for training.",
-     "Train A only had four real failures, which is too few to tell how small a leak each model can catch. So we tested it with pretend leaks. How it works: we took 12 normal days when nothing was wrong. In each day we edited the recording so that, while the compressor was resting, the air pressure fell faster than it really did. That is exactly what a leak looks like, because escaping air makes the pressure drop. The slider sets how fast: the bigger the number, the bigger the leak compared with the normal air loss. At 0× nothing is changed, so any alarm there would be a false one. We then ran each model on the edited days and counted on how many of the 12 days it raised an alarm. These edited days were only used for this test; no model learned from them."),
+     "A handful of real failures can't tell us how small a leak each model can spot. So the notebook added pretend leaks of a known size to 12 healthy days and counted how often each model caught them. This was only for testing; no model was trained on it."),
     ("Injected leak, as a multiple of the normal pressure-loss rate", "Size of the pretend leak, compared with normal air loss"),
     ("Data: the per-minute physics features exported by the project notebook. The model (an autoencoder on the 14 physics features, fitted only on Train A's healthy period, 1 Feb to 15 Mar 2020) runs in this browser; the monitor shows every fifth minute. On Train B it runs as a model the train has never seen.",
-     ""),
-    ("    <p>Watch: health index below 0.05, which means the compressor is behaving worse than 95% of healthy minutes. Alarm: the notebook's alarm rule (above the 99.5% healthy level for 80% of 30 minutes, blocked during sensor check). Failure times are the reported times from the dataset documentation. The supervised 24-hour classifier is not shown because it scored close to chance.</p>\n",
-     ""),
+     "Data: real per-minute sensor measurements from the MetroPT-3 (Train A, 2020) and MetroPT2 (Train B, 2022) datasets, prepared by our notebook. The model learned only from Train A's healthy days (1 Feb to 15 Mar 2020) and runs in this browser. It never saw Train B during training. The monitor draws every fifth minute."),
+    ("Watch: health index below 0.05, which means the compressor is behaving worse than 95% of healthy minutes. Alarm: the notebook's alarm rule (above the 99.5% healthy level for 80% of 30 minutes, blocked during sensor check). Failure times are the reported times from the dataset documentation. The supervised 24-hour classifier is not shown because it scored close to chance.",
+     "Watch means the health index is below 0.05: the compressor is doing worse than 95% of its healthy minutes. Alarm means the error stayed above the top 0.5% of healthy minutes for 24 of the last 30 minutes, with the sensors working. Failure times come from the datasets' own reports. We also tried a model that predicts failures 24 hours ahead, but it did no better than guessing, so it isn't shown here."),
     ('  ok: "Behaving like the healthy period.",', '  ok: "Working the way it did on healthy days.",'),
     ('  watch: "Worse than 95% of healthy minutes, but not yet the sustained deviation needed for an alarm.",', '  watch: "A bit unusual: worse than 95% of healthy minutes, but not for long enough to raise an alarm.",'),
     ('  alarm: "Above the 99.5% healthy level for most of the last 30 minutes. The depot would be notified.",', '  alarm: "Clearly unusual for most of the last 30 minutes. The depot has been alerted.",'),
@@ -462,6 +462,16 @@ COPY = [
 ]
 for a, b in COPY:
     rep(a, b)
+
+# v6: footer removed (foot1 kept hidden for the fallback note), leak test and A-E3 explained simply
+FOOT = s[s.index('  <footer>'):s.index('  </footer>') + len('  </footer>')]
+rep(FOOT, '  <footer>\n    <p id="foot1" hidden></p>\n  </footer>')
+rep("A handful of real failures can't tell us how small a leak each model can spot. So the notebook added pretend leaks of a known size to 12 healthy days and counted how often each model caught them. This was only for testing; no model was trained on it.",
+    "How the test works: we took 12 real days when Train A was healthy and edited each recording to look as if a leak had started. With a leak, air escapes, so while the compressor rests the pressure falls faster, and when it pumps it takes longer to fill back up. We squeezed and stretched the real resting and pumping stretches to match, growing the leak over 12 hours and then holding it for 12 more. The slider sets the leak size, and the bars show how often each model raised an alarm. 0× adds no leak, which checks that the editing alone doesn't cause false alarms. This was only for testing; no model was trained on it.")
+rep("Size of the pretend leak, compared with normal air loss", "Leak size (1× = air escapes as fast as it normally drains at rest, so the pressure falls about twice as fast)")
+rep('story: "There was no warning before A-E3, but once the leak develops the alarm holds for hours. The explanation points at the compressor: it spends much longer pumping and takes longer to refill the reservoir, which is what an air leak does." },',
+    'story: "A-E3 was an air leak. The model did not spot it beforehand, but while the leak was happening the train went red and stayed red for hours. Look at the parts that light up: the compressor is pumping far longer than usual and the air tank is slow to refill. That is what you would expect when air is escaping, because the compressor has to work overtime to keep up." },')
+
 
 # main script end: close startApp and append the new app code
 tail = s[s.rindex("requestAnimationFrame(netFrame);\n</script>"):]
