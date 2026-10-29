@@ -292,7 +292,7 @@ footer p { margin: 0 0 6px; max-width: 110ch; }
       <defs><linearGradient id="fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0A0F13" stop-opacity="0"/><stop offset="0.7" stop-color="#0A0F13"/></linearGradient></defs>
     </svg>
     <h1 class="word"><span>Metro</span><span>Grid</span></h1>
-    <p>Early warning for metro air compressors. A model trained on healthy days watches every train and tells the depot when one starts to drift.</p>
+    <p>Every metro train has an air compressor that powers its brakes and doors. Metro Grid watches each one and warns the depot when it starts behaving differently from its healthy self.</p>
   </div>
   <div class="form">
     <form id="loginform" autocomplete="off">
@@ -305,7 +305,6 @@ footer p { margin: 0 0 6px; max-width: 110ch; }
         <label class="role"><input type="radio" name="role" value="operator"><b>Operator</b><span>Watches the network and acknowledges alerts.</span></label>
       </fieldset>
       <button class="btn primary" type="submit">Enter Metro Grid</button>
-      <p class="note" style="margin:0">Demo sign-in for the FML mini-project: there is no password, and your name stays in this browser.</p>
       <p class="status-line" id="loadline">Starting the model…</p>
     </form>
   </div>
@@ -340,7 +339,7 @@ footer p { margin: 0 0 6px; max-width: 110ch; }
         <g id="trains"></g>
       </svg>
       </div>
-      <p class="note">Schematic network, not to scale. The datasets do not record which line each train ran on, so positions are illustrative. Each train's colour is the model's verdict on its real recording, played back at 1 hour per second. A train in alarm is held where it is until the alarm clears; a train on watch slows down.</p>
+      <p class="note">The map is a simplified drawing, and the datasets don't say which line each train ran on, so the routes are just for show. The colours are real: each train replays its actual sensor recording at one hour per second. A train in alarm stops until the alarm clears, and a train on watch slows down.</p>
     </div>
     <aside class="side">
       <div class="panel">
@@ -351,10 +350,10 @@ footer p { margin: 0 0 6px; max-width: 110ch; }
         <h2>Marker colours</h2>
         <div class="legend" style="margin:8px 0 0;display:grid;gap:6px">
           <span><i style="background:var(--ok)"></i>Healthy</span>
-          <span><i style="background:var(--watch)"></i>Watch: worse than 95% of healthy minutes</span>
-          <span><i style="background:var(--alarm)"></i>Alarm: the depot would be notified</span>
-          <span><i style="background:var(--sensor)"></i>Sensor check: data cannot be trusted</span>
-          <span><i style="background:var(--nodata)"></i>No sensor data in the datasets</span>
+          <span><i style="background:var(--watch)"></i>Watch: a bit unusual, keep an eye on it</span>
+          <span><i style="background:var(--alarm)"></i>Alarm: clearly unusual for 30 minutes, depot alerted</span>
+          <span><i style="background:var(--sensor)"></i>Sensor check: bad sensor readings, model paused</span>
+          <span><i style="background:var(--nodata)"></i>Empty slot: no train loaded yet</span>
         </div>
       </div>
     </aside>
@@ -369,7 +368,7 @@ footer p { margin: 0 0 6px; max-width: 110ch; }
     <div class="depot">
       <section class="panel" aria-label="Live inbox">
         <h2>Live inbox</h2>
-        <p class="note" style="margin-top:4px">Alerts arrive here the moment a train's recording reaches an alarm or a sensor fault in the replay. The actions are part of the demo and are not sent anywhere.</p>
+        <p class="note" style="margin-top:4px">New alerts appear here as the replay reaches them. Acknowledge one to show you've seen it, or book the train in for a repair that night. This is a demo, so nothing is actually sent.</p>
         <div class="inbox" id="inbox"></div>
       </section>
       <section class="panel" aria-label="Alarm history">
@@ -377,7 +376,7 @@ footer p { margin: 0 0 6px; max-width: 110ch; }
         <p class="note" style="margin-top:4px" id="histsum"></p>
         <div class="chips" id="chips"></div>
         <div class="tblwrap"><table class="tbl"><thead><tr><th>Train</th><th>Alarm started</th><th>Length</th><th>Part</th><th>Outcome</th></tr></thead><tbody id="hist"></tbody></table></div>
-        <p class="note">Outcome compares each alarm with the reported failure times. Click a row to open that moment in the health monitor.</p>
+        <p class="note">Outcome says whether a real reported failure happened close to the alarm. Click any row to see that moment inside the train.</p>
       </section>
     </div>
   </div>
@@ -387,15 +386,16 @@ footer p { margin: 0 0 6px; max-width: 110ch; }
       <section class="panel">
         <h2>The model</h2>
         <svg id="arch" viewBox="0 0 640 250" role="img" aria-label="Autoencoder: 14 inputs, hidden layers of 8, 4 and 8, 14 outputs"></svg>
-        <p class="note" style="font-size:14px;color:var(--fg)">An autoencoder learns to rebuild the 14 physics features of a healthy compressor. It was trained only on Train A's healthy minutes, so it has never seen a failure. When a compressor starts behaving unlike its healthy self, the rebuild error grows. The error is smoothed over an hour, compared with the train's own healthy calibration minutes to give the health index, and turned into an alarm only if it stays high.</p>
+        <p class="note" style="font-size:14px;color:var(--fg)">The model is an autoencoder: a small neural network that squeezes 14 measurements through a narrow middle layer and tries to rebuild them. We trained it only on minutes when Train A's compressor was healthy, so it gets very good at rebuilding healthy behaviour and bad at anything else. When a compressor starts to leak, the rebuild gets worse. That error, smoothed over an hour, becomes the health index, and a long stretch of high error becomes an alarm.</p>
         <dl class="facts" id="facts"></dl>
       </section>
       <section class="panel">
         <h2>Does the browser match the notebook?</h2>
-        <p class="note" style="font-size:14px">This page runs the model itself. Every minute below was scored twice, once by the notebook in Colab and once here, and the two are compared.</p>
+        <p class="note" style="font-size:14px">The model runs inside this page. To show it is the same model as in our report, every minute was scored twice, once in the Colab notebook and once here, and the answers are compared below.</p>
         <div class="tblwrap" style="max-height:none"><table class="tbl agree" id="agree"></table></div>
-        <h2 style="margin-top:16px">Inputs</h2>
-        <div class="chips" id="featchips"></div>
+        <h2 style="margin-top:16px">What the model looks at</h2>
+        <p class="note" style="font-size:14px">Fourteen measurements worked out from the raw sensors every minute. Each one was picked because an air or oil leak changes it.</p>
+        <div id="featchips" style="display:grid;gap:8px;margin-top:8px"></div>
       </section>
     </div>
   </div>
@@ -410,7 +410,7 @@ footer p { margin: 0 0 6px; max-width: 110ch; }
 <div class="modal" id="addmodal" hidden role="dialog" aria-modal="true" aria-labelledby="addtitle">
   <form class="modalbox" id="addform" novalidate>
     <h2 id="addtitle">Add a train</h2>
-    <p class="note" style="margin:0;font-size:14px">Load the per-minute feature file for a train, made in Colab by the notebook's <span class="mono">export_train()</span>. The model runs here in your browser and the train joins the network.</p>
+    <p class="note" style="margin:0;font-size:14px">Bring in another train. In Colab, run <span class="mono">export_train()</span> on the train's raw sensor file to get a feature file, then load it here. The model checks every minute right here in your browser, and the train appears on the map.</p>
     <div class="filerow">
       <input type="file" id="addfile" accept=".csv,.gz,.csv.gz" style="max-width:100%">
       <button type="button" class="btn" id="addsample">Use a sample file</button>
@@ -421,17 +421,17 @@ footer p { margin: 0 0 6px; max-width: 110ch; }
       <label>Runs on<select id="addline"><option value="L3">Green line</option><option value="L4">Orange line</option><option value="L1">Blue line</option><option value="L2">Red line</option></select></label>
     </div>
     <fieldset>
-      <legend>Healthy periods the model calibrates on</legend>
-      <label class="inline"><input type="radio" name="per" value="file" checked> Use the periods marked in the file</label>
-      <label class="inline"><input type="radio" name="per" value="dates"> Set the dates myself</label>
+      <legend>When was this train healthy? The model learns what normal looks like from these days.</legend>
+      <label class="inline"><input type="radio" name="per" value="file" checked> Use the healthy days saved in the file</label>
+      <label class="inline"><input type="radio" name="per" value="dates"> Pick the dates myself</label>
       <div class="grid3" id="perdates" hidden>
-        <label>Fit from<input type="date" id="fitfrom"></label>
-        <label>Fit until<input type="date" id="fitto"></label>
-        <label>Calibrate until<input type="date" id="calto"></label>
+        <label>Learn normal from<input type="date" id="fitfrom"></label>
+        <label>Learn normal until<input type="date" id="fitto"></label>
+        <label>Double-check until<input type="date" id="calto"></label>
       </div>
     </fieldset>
     <fieldset>
-      <legend>Reported failure (optional)</legend>
+      <legend>Known failure (optional). The depot desk will then show whether the model warned in time.</legend>
       <div class="grid3">
         <label>Start<input type="datetime-local" id="evstart"></label>
         <label>End<input type="datetime-local" id="evend"></label>
@@ -450,7 +450,7 @@ footer p { margin: 0 0 6px; max-width: 110ch; }
   <header>
     <div>
       <h1>APU Health Monitor</h1>
-      <p id="monsub">The model's verdict for every minute of the recording, computed in this browser. Play the recording and watch it classify each moment as healthy, watch, alarm or sensor check.</p>
+      <p id="monsub">A look inside one train's air compressor (the APU). Press Play to run through the recording. Parts light up when the model finds something unusual there.</p>
     </div>
     <div class="trains" id="trainbtns" role="group" aria-label="Choose a train"></div>
   </header>
@@ -568,7 +568,7 @@ footer p { margin: 0 0 6px; max-width: 110ch; }
       <div class="panel">
         <h2>Most unusual signals</h2>
         <ul class="why" id="why"></ul>
-        <p class="note">The three physics features furthest from this train's healthy baseline right now. During a watch or alarm, their parts light up on the diagram.</p>
+        <p class="note">The three measurements furthest from normal for this train right now. During a watch or alarm, the matching parts light up on the drawing.</p>
       </div>
       <div class="panel">
         <h2>On record for this train</h2>
@@ -598,10 +598,10 @@ footer p { margin: 0 0 6px; max-width: 110ch; }
 
   <section class="panel" id="injpanel" aria-label="Leak injection test">
     <h2>Leak injection test · Train A</h2>
-    <p class="note" style="margin-top:4px;max-width:80ch">Four real failures cannot show how small a leak each detector can catch, so the notebook stretched real operating episodes in 12 healthy 24-hour windows to mimic a leak of known size. This was used for testing only, never for training.</p>
+    <p class="note" style="margin-top:4px;max-width:80ch">A handful of real failures can't tell us how small a leak each model can spot. So the notebook added pretend leaks of a known size to 12 healthy days and counted how often each model caught them. This was only for testing; no model was trained on it.</p>
     <div class="inj">
       <div>
-        <label for="sev" class="muted" style="font-size:13px">Injected leak, as a multiple of the normal pressure-loss rate</label>
+        <label for="sev" class="muted" style="font-size:13px">Size of the pretend leak, compared with normal air loss</label>
         <div class="sev mono" id="sevv">1×</div>
         <input type="range" id="sev" min="0" max="5" step="1" value="3">
         <p class="note" id="sevnote"></p>
@@ -611,8 +611,8 @@ footer p { margin: 0 0 6px; max-width: 110ch; }
   </section>
 
   <footer>
-    <p id="foot1">Data: the per-minute physics features exported by the project notebook. The model (an autoencoder on the 14 physics features, fitted only on Train A's healthy period, 1 Feb to 15 Mar 2020) runs in this browser; the monitor shows every fifth minute. On Train B it runs as a model the train has never seen.</p>
-    <p>Watch: health index below 0.05, which means the compressor is behaving worse than 95% of healthy minutes. Alarm: the notebook's alarm rule (above the 99.5% healthy level for 80% of 30 minutes, blocked during sensor check). Failure times are the reported times from the dataset documentation. The supervised 24-hour classifier is not shown because it scored close to chance.</p>
+    <p id="foot1">Data: real per-minute sensor measurements from the MetroPT-3 (Train A, 2020) and MetroPT2 (Train B, 2022) datasets, prepared by our notebook. The model learned only from Train A's healthy days (1 Feb to 15 Mar 2020) and runs in this browser. It never saw Train B during training. The monitor draws every fifth minute.</p>
+    <p>Watch means the health index is below 0.05: the compressor is doing worse than 95% of its healthy minutes. Alarm means the error stayed above the top 0.5% of healthy minutes for 24 of the last 30 minutes, with the sensors working. Failure times come from the datasets' own reports. We also tried a model that predicts failures 24 hours ahead, but it did no better than guessing, so it isn't shown here.</p>
   </footer>
 </div>
 </div>
@@ -964,11 +964,11 @@ function status(k, i) {
 }
 const LABEL = { ok: "Healthy", watch: "Watch", alarm: "Alarm", sensor: "Sensor check", nodata: "Warming up" };
 const NOTE = {
-  ok: "Behaving like the healthy period.",
-  watch: "Worse than 95% of healthy minutes, but not yet the sustained deviation needed for an alarm.",
-  alarm: "Above the 99.5% healthy level for most of the last 30 minutes. The depot would be notified.",
-  sensor: "Sensor readings are frozen or impossible, so the model does not judge this minute.",
-  nodata: "Not enough valid history yet to compute the health index.",
+  ok: "Working the way it did on healthy days.",
+  watch: "A bit unusual: worse than 95% of healthy minutes, but not for long enough to raise an alarm.",
+  alarm: "Clearly unusual for most of the last 30 minutes. The depot has been alerted.",
+  sensor: "The sensors are giving frozen or impossible readings, so the model is not judging this minute.",
+  nodata: "Not enough recent data yet to work out a health index.",
 };
 
 function render() {
@@ -1394,9 +1394,9 @@ function showToast(a) {
 $("toastx").onclick = () => { $("toast").hidden = true; };
 $("toastgo").onclick = () => { $("toast").hidden = true; showTab("depot"); };
 const TITLES = {
-  network: ["Network", "Trains run around the network while the model watches each one's air production unit. Colour is the model's verdict on the train's real recording. Click a train to open its health monitor."],
-  depot: ["Depot desk", "Alerts the model sends to the depot, and every alarm it raised across the recordings."],
-  model: ["Model", "What runs behind every colour on the map, and proof that this page computes the same answers as the notebook."],
+  network: ["Network", "Each marker is a train. Its colour is what the model thinks of that train's air compressor: green is fine, yellow needs watching, red means the depot has been alerted and the train is held. Click a train to look inside."],
+  depot: ["Depot desk", "The depot team's screen. Alerts from the model land in the inbox on the left. On the right is every alarm the model raised and whether a real failure followed."],
+  model: ["Model", "How the model decides, what it looks at, and a check that this page gives the same answers as our Python notebook."],
 };
 function showTab(t) {
   for (const v of ["network", "depot", "model"]) { $("view-" + v).hidden = v !== t; $("tab-" + v).setAttribute("aria-selected", v === t); }
@@ -1427,6 +1427,22 @@ requestAnimationFrame(netFrame);
 function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]); }
 const nf = (v) => v.toLocaleString("en-GB");
 
+const EXPLAIN = {
+  off_decay_rate_60min: "How fast the air pressure falls while the compressor rests, over the last hour. A leak makes it fall faster.",
+  off_decay_rate_360min: "The same pressure fall, averaged over six hours, so short blips matter less.",
+  decay_cusum: "A running total of how far the pressure fall has crept above normal. Good at catching slow, steady leaks.",
+  decay_ewma_z: "A smoothed trend of the pressure fall compared with normal. It climbs as a leak builds up.",
+  load_rise_rate_60min: "How quickly pressure rises while the compressor pumps, over the last hour. Slower when air escapes or the pump is worn.",
+  load_rise_rate_360min: "The same pumping speed over six hours.",
+  duty_loaded_60min: "Share of the last hour the compressor spent pumping. It has to work harder to make up for lost air.",
+  duty_loaded_360min: "The same share of time pumping, over six hours.",
+  load_cycles_per_h_60min: "How many times an hour the compressor switches on. A leak makes it start more often.",
+  load_cycles_per_h_360min: "The same switch-on count, over six hours.",
+  refill_minutes_360min: "How long the main air tank takes to fill back up. It takes longer when air is escaping.",
+  oil_temp_excess: "How much hotter the oil is than the workload explains. Points to oil or cooling trouble.",
+  tp2_tp3_loaded_60min: "Pressure lost on the way through the air dryer while pumping. Rises if the dryer clogs or leaks.",
+  tp3_res_gap_60min: "Difference between the control panel's pressure and the main tank's. Grows when air leaks between them.",
+};
 function renderModel() {
   const sizes = [MODEL.coefs[0].length, ...MODEL.coefs.map((w) => w[0].length)];
   const cols = ["var(--l1)", "var(--l3)", "var(--l4)", "var(--l3)", "var(--l2)"];
@@ -1441,23 +1457,22 @@ function renderModel() {
     lab.map((t, l) => `<text x="${X(l)}" y="240" text-anchor="middle" fill="var(--muted)" style="font:700 12.5px var(--display)">${t}</text>`).join("");
   const fp = MODEL.fit_period.map((d) => { const x = new Date(d + "T00:00:00Z"); return `${x.getUTCDate()} ${MON[x.getUTCMonth()]} ${x.getUTCFullYear()}`; });
   const facts = [
-    ["Trained on", `Train A's healthy minutes, ${fp[0]} to ${fp[1]}`],
-    ["Network", `${sizes.join(" → ")}, ${MODEL.activation} hidden layers`],
-    ["Training", `${MODEL.n_iter} iterations, scikit-learn ${MODEL.sklearn}`],
-    ["Score", `rebuild error, ${MODEL.smooth_window_min}-minute rolling median`],
-    ["Health index", "share of the train's own healthy calibration minutes that scored higher"],
-    ["Alarm", `score above the ${(MODEL.alarm_quantile * 100).toFixed(1)}th percentile for ${MODEL.persist_fraction * 100}% of ${MODEL.persist_window_min} minutes, sensors healthy`],
-    ["Runs in", "this browser, in a background worker"],
+    ["Learned from", `Train A's healthy days only, ${fp[0]} to ${fp[1]}. It never saw a failure.`],
+    ["Network size", `${sizes.join(" → ")} neurons (${MODEL.activation}), trained for ${MODEL.n_iter} rounds in scikit-learn ${MODEL.sklearn}`],
+    ["Error score", `how badly it rebuilds the 14 measurements, smoothed over ${MODEL.smooth_window_min} minutes`],
+    ["Health index", "from 1 (as normal as this train's healthy days) down to 0 (more unusual than any healthy minute)"],
+    ["Alarm", `error above the top ${((1 - MODEL.alarm_quantile) * 100).toFixed(1)}% of healthy minutes for ${Math.round(MODEL.persist_fraction * MODEL.persist_window_min)} of the last ${MODEL.persist_window_min} minutes, with sensors working`],
+    ["Runs in", "your browser. Nothing is sent to a server."],
   ];
   $("facts").innerHTML = facts.map(([a, b]) => `<dt>${a}</dt><dd>${esc(b)}</dd>`).join("");
   const rows = Object.keys(U).map((k) => {
     const a = AGREE[k];
-    if (!a) return `<tr><td>${esc(META[k].name)}</td><td colspan="4">Not run here: showing the notebook's saved output.</td></tr>`;
+    if (!a) return `<tr><td>${esc(META[k].name)}</td><td colspan="4">Not run here (${esc(LOADERR || "unknown reason")}), so this shows the notebook's saved results.</td></tr>`;
     if (!a.compared) return `<tr><td>${esc(META[k].name)}</td><td class="num">${nf(a.rows)}</td><td colspan="2">File has no notebook values to compare</td><td class="num">${nf(a.jsAlarm)} / –</td></tr>`;
     return `<tr><td>${esc(META[k].name)}</td><td class="num">${nf(a.compared)}</td><td class="num"><b class="okmark">${a.withinPct}</b></td><td class="num">${a.maxd.toFixed(4)}</td><td class="num">${nf(a.jsAlarm)} / ${nf(a.pyAlarm)}</td></tr>`;
   }).join("");
   $("agree").innerHTML = `<thead><tr><th>Train</th><th class="num">Minutes compared</th><th class="num">Health index within 0.005</th><th class="num">Largest gap</th><th class="num">Alarm minutes, browser / notebook</th></tr></thead><tbody>${rows}</tbody>`;
-  $("featchips").innerHTML = MODEL.features.map((f) => `<span class="feat" title="${f}">${esc(NICE[f][0])}</span>`).join("");
+  $("featchips").innerHTML = MODEL.features.map((f) => `<div><b style="font:800 14.5px var(--display)">${esc(NICE[f][0])}</b> <span class="muted" style="font-size:12px">· ${PARTNAME[NICE[f][1]]}</span><div class="note" style="margin:2px 0 0;font-size:13.5px">${esc(EXPLAIN[f])}</div></div>`).join("");
 }
 
 // ---- Add a train
@@ -1549,7 +1564,7 @@ $("addform").addEventListener("submit", async (e) => {
   $("toast").hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { $("toast").hidden = true; }, 9000);
 });
 document.addEventListener("mg-user", renderInbox);
-if (!LIVE.A) $("foot1").textContent = "The model could not run in this browser, so the monitor shows the notebook's saved outputs for Trains A and B (sampled every 5 minutes). Add a train needs the model, so it is switched off.";
+if (!LIVE.A) $("foot1").textContent = `The model couldn't start in this browser (${LOADERR || "unknown reason"}), so you're seeing our notebook's saved results instead. Try reloading the page or using Chrome. Adding a train needs the model, so that button is off for now.`;
 if (!LIVE.A) { $("addbtn").disabled = true; $("addbtn").title = "The model could not start in this browser"; }
 }
 
@@ -1611,25 +1626,31 @@ async function processBuffer(MG, model, feats, regimes, buf, opts, progress) {
   };
 }
 
-let worker = null, jobs = 0;
+let worker = null, jobs = 0, workerOk = () => {};
+// Some hosts block background workers without raising an error, so wait for the worker to say hello first
+const workerReady = new Promise((res) => { workerOk = res; setTimeout(() => res(false), 4000); });
 const pending = {};
 try {
   const src = byId("engine-src").textContent + "\n" + processBuffer.toString() +
     `\nself.onmessage = async (e) => { const { id, buf, opts, model, feats, regimes } = e.data;
       try { const r = await processBuffer(MG, model, feats, regimes, buf, opts, (p, msg) => self.postMessage({ id, p, msg }));
-        self.postMessage({ id, done: r }); } catch (err) { self.postMessage({ id, error: err.message || String(err) }); } };`;
+        self.postMessage({ id, done: r }); } catch (err) { self.postMessage({ id, error: err.message || String(err) }); } };
+    self.postMessage({ ready: true });`;
   worker = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
   worker.onmessage = (e) => {
+    if (e.data.ready) { workerOk(true); return; }
     const { id, p, msg, done, error } = e.data, job = pending[id]; if (!job) return;
     if (error) { delete pending[id]; job.reject(new Error(error)); } else if (done) { delete pending[id]; job.resolve(done); } else job.progress(p, msg);
   };
-  worker.onerror = (e) => { for (const id in pending) { pending[id].reject(new Error("The model worker stopped: " + (e.message || "unknown error"))); delete pending[id]; } };
-} catch (e) { worker = null; }
-function runModel(buf, opts, progress) {
-  if (!worker) return processBuffer(MG, MODEL, DATA.feats, DATA.regimes, buf, opts, progress);   // same code, on the page
-  const id = ++jobs;
+  worker.onerror = () => { workerOk(false); for (const id in pending) { const j = pending[id]; delete pending[id]; j.workerFail(); } };   // e.g. blocked by the host
+} catch (e) { worker = null; workerOk(false); }
+async function runModel(buf, opts, progress) {
+  const onPage = (b) => processBuffer(MG, MODEL, DATA.feats, DATA.regimes, b, opts, progress);   // same code, on the page
+  if (worker && !(await workerReady)) { worker.terminate(); worker = null; }
+  if (!worker) return onPage(buf);
+  const id = ++jobs, spare = buf.slice(0);
   return new Promise((resolve, reject) => {
-    pending[id] = { resolve, reject, progress };
+    pending[id] = { resolve, reject, progress, workerFail: () => { worker = null; onPage(spare).then(resolve, reject); } };
     worker.postMessage({ id, buf, opts, model: MODEL, feats: DATA.feats, regimes: DATA.regimes }, [buf]);
   });
 }
@@ -1653,6 +1674,7 @@ function unb64(buf) {
   return out.buffer;
 }
 const LIVE = {}, AGREE = {};
+let LOADERR = "";
 let loadState = { p: 0, msg: "Starting the model…" }, ready = null;
 function setLoad(p, msg) {
   loadState = { p, msg };
@@ -1672,7 +1694,8 @@ async function loadAll() {
     setLoad(1, `Model ready · ${(AGREE.A.rows + AGREE.B.rows).toLocaleString("en-GB")} minutes scored in this browser`);
   } catch (e) {
     for (const k of ks) { delete LIVE[k]; AGREE[k] = null; }
-    setLoad(1, "The model could not run here, so the replay uses the notebook's saved outputs.");
+    LOADERR = e && e.message ? e.message : String(e);
+    setLoad(1, "The model couldn't start here, so the app will show the notebook's saved results.");
     console.warn(e);
   }
 }

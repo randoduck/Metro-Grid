@@ -3,6 +3,22 @@
 function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]); }
 const nf = (v) => v.toLocaleString("en-GB");
 
+const EXPLAIN = {
+  off_decay_rate_60min: "How fast the air pressure falls while the compressor rests, over the last hour. A leak makes it fall faster.",
+  off_decay_rate_360min: "The same pressure fall, averaged over six hours, so short blips matter less.",
+  decay_cusum: "A running total of how far the pressure fall has crept above normal. Good at catching slow, steady leaks.",
+  decay_ewma_z: "A smoothed trend of the pressure fall compared with normal. It climbs as a leak builds up.",
+  load_rise_rate_60min: "How quickly pressure rises while the compressor pumps, over the last hour. Slower when air escapes or the pump is worn.",
+  load_rise_rate_360min: "The same pumping speed over six hours.",
+  duty_loaded_60min: "Share of the last hour the compressor spent pumping. It has to work harder to make up for lost air.",
+  duty_loaded_360min: "The same share of time pumping, over six hours.",
+  load_cycles_per_h_60min: "How many times an hour the compressor switches on. A leak makes it start more often.",
+  load_cycles_per_h_360min: "The same switch-on count, over six hours.",
+  refill_minutes_360min: "How long the main air tank takes to fill back up. It takes longer when air is escaping.",
+  oil_temp_excess: "How much hotter the oil is than the workload explains. Points to oil or cooling trouble.",
+  tp2_tp3_loaded_60min: "Pressure lost on the way through the air dryer while pumping. Rises if the dryer clogs or leaks.",
+  tp3_res_gap_60min: "Difference between the control panel's pressure and the main tank's. Grows when air leaks between them.",
+};
 function renderModel() {
   const sizes = [MODEL.coefs[0].length, ...MODEL.coefs.map((w) => w[0].length)];
   const cols = ["var(--l1)", "var(--l3)", "var(--l4)", "var(--l3)", "var(--l2)"];
@@ -17,23 +33,22 @@ function renderModel() {
     lab.map((t, l) => `<text x="${X(l)}" y="240" text-anchor="middle" fill="var(--muted)" style="font:700 12.5px var(--display)">${t}</text>`).join("");
   const fp = MODEL.fit_period.map((d) => { const x = new Date(d + "T00:00:00Z"); return `${x.getUTCDate()} ${MON[x.getUTCMonth()]} ${x.getUTCFullYear()}`; });
   const facts = [
-    ["Trained on", `Train A's healthy minutes, ${fp[0]} to ${fp[1]}`],
-    ["Network", `${sizes.join(" → ")}, ${MODEL.activation} hidden layers`],
-    ["Training", `${MODEL.n_iter} iterations, scikit-learn ${MODEL.sklearn}`],
-    ["Score", `rebuild error, ${MODEL.smooth_window_min}-minute rolling median`],
-    ["Health index", "share of the train's own healthy calibration minutes that scored higher"],
-    ["Alarm", `score above the ${(MODEL.alarm_quantile * 100).toFixed(1)}th percentile for ${MODEL.persist_fraction * 100}% of ${MODEL.persist_window_min} minutes, sensors healthy`],
-    ["Runs in", "this browser, in a background worker"],
+    ["Learned from", `Train A's healthy days only, ${fp[0]} to ${fp[1]}. It never saw a failure.`],
+    ["Network size", `${sizes.join(" → ")} neurons (${MODEL.activation}), trained for ${MODEL.n_iter} rounds in scikit-learn ${MODEL.sklearn}`],
+    ["Error score", `how badly it rebuilds the 14 measurements, smoothed over ${MODEL.smooth_window_min} minutes`],
+    ["Health index", "from 1 (as normal as this train's healthy days) down to 0 (more unusual than any healthy minute)"],
+    ["Alarm", `error above the top ${((1 - MODEL.alarm_quantile) * 100).toFixed(1)}% of healthy minutes for ${Math.round(MODEL.persist_fraction * MODEL.persist_window_min)} of the last ${MODEL.persist_window_min} minutes, with sensors working`],
+    ["Runs in", "your browser. Nothing is sent to a server."],
   ];
   $("facts").innerHTML = facts.map(([a, b]) => `<dt>${a}</dt><dd>${esc(b)}</dd>`).join("");
   const rows = Object.keys(U).map((k) => {
     const a = AGREE[k];
-    if (!a) return `<tr><td>${esc(META[k].name)}</td><td colspan="4">Not run here: showing the notebook's saved output.</td></tr>`;
+    if (!a) return `<tr><td>${esc(META[k].name)}</td><td colspan="4">Not run here (${esc(LOADERR || "unknown reason")}), so this shows the notebook's saved results.</td></tr>`;
     if (!a.compared) return `<tr><td>${esc(META[k].name)}</td><td class="num">${nf(a.rows)}</td><td colspan="2">File has no notebook values to compare</td><td class="num">${nf(a.jsAlarm)} / –</td></tr>`;
     return `<tr><td>${esc(META[k].name)}</td><td class="num">${nf(a.compared)}</td><td class="num"><b class="okmark">${a.withinPct}</b></td><td class="num">${a.maxd.toFixed(4)}</td><td class="num">${nf(a.jsAlarm)} / ${nf(a.pyAlarm)}</td></tr>`;
   }).join("");
   $("agree").innerHTML = `<thead><tr><th>Train</th><th class="num">Minutes compared</th><th class="num">Health index within 0.005</th><th class="num">Largest gap</th><th class="num">Alarm minutes, browser / notebook</th></tr></thead><tbody>${rows}</tbody>`;
-  $("featchips").innerHTML = MODEL.features.map((f) => `<span class="feat" title="${f}">${esc(NICE[f][0])}</span>`).join("");
+  $("featchips").innerHTML = MODEL.features.map((f) => `<div><b style="font:800 14.5px var(--display)">${esc(NICE[f][0])}</b> <span class="muted" style="font-size:12px">· ${PARTNAME[NICE[f][1]]}</span><div class="note" style="margin:2px 0 0;font-size:13.5px">${esc(EXPLAIN[f])}</div></div>`).join("");
 }
 
 // ---- Add a train
@@ -125,7 +140,7 @@ $("addform").addEventListener("submit", async (e) => {
   $("toast").hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { $("toast").hidden = true; }, 9000);
 });
 document.addEventListener("mg-user", renderInbox);
-if (!LIVE.A) $("foot1").textContent = "The model could not run in this browser, so the monitor shows the notebook's saved outputs for Trains A and B (sampled every 5 minutes). Add a train needs the model, so it is switched off.";
+if (!LIVE.A) $("foot1").textContent = `The model couldn't start in this browser (${LOADERR || "unknown reason"}), so you're seeing our notebook's saved results instead. Try reloading the page or using Chrome. Adding a train needs the model, so that button is off for now.`;
 if (!LIVE.A) { $("addbtn").disabled = true; $("addbtn").title = "The model could not start in this browser"; }
 }
 
@@ -187,25 +202,31 @@ async function processBuffer(MG, model, feats, regimes, buf, opts, progress) {
   };
 }
 
-let worker = null, jobs = 0;
+let worker = null, jobs = 0, workerOk = () => {};
+// Some hosts block background workers without raising an error, so wait for the worker to say hello first
+const workerReady = new Promise((res) => { workerOk = res; setTimeout(() => res(false), 4000); });
 const pending = {};
 try {
   const src = byId("engine-src").textContent + "\n" + processBuffer.toString() +
     `\nself.onmessage = async (e) => { const { id, buf, opts, model, feats, regimes } = e.data;
       try { const r = await processBuffer(MG, model, feats, regimes, buf, opts, (p, msg) => self.postMessage({ id, p, msg }));
-        self.postMessage({ id, done: r }); } catch (err) { self.postMessage({ id, error: err.message || String(err) }); } };`;
+        self.postMessage({ id, done: r }); } catch (err) { self.postMessage({ id, error: err.message || String(err) }); } };
+    self.postMessage({ ready: true });`;
   worker = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
   worker.onmessage = (e) => {
+    if (e.data.ready) { workerOk(true); return; }
     const { id, p, msg, done, error } = e.data, job = pending[id]; if (!job) return;
     if (error) { delete pending[id]; job.reject(new Error(error)); } else if (done) { delete pending[id]; job.resolve(done); } else job.progress(p, msg);
   };
-  worker.onerror = (e) => { for (const id in pending) { pending[id].reject(new Error("The model worker stopped: " + (e.message || "unknown error"))); delete pending[id]; } };
-} catch (e) { worker = null; }
-function runModel(buf, opts, progress) {
-  if (!worker) return processBuffer(MG, MODEL, DATA.feats, DATA.regimes, buf, opts, progress);   // same code, on the page
-  const id = ++jobs;
+  worker.onerror = () => { workerOk(false); for (const id in pending) { const j = pending[id]; delete pending[id]; j.workerFail(); } };   // e.g. blocked by the host
+} catch (e) { worker = null; workerOk(false); }
+async function runModel(buf, opts, progress) {
+  const onPage = (b) => processBuffer(MG, MODEL, DATA.feats, DATA.regimes, b, opts, progress);   // same code, on the page
+  if (worker && !(await workerReady)) { worker.terminate(); worker = null; }
+  if (!worker) return onPage(buf);
+  const id = ++jobs, spare = buf.slice(0);
   return new Promise((resolve, reject) => {
-    pending[id] = { resolve, reject, progress };
+    pending[id] = { resolve, reject, progress, workerFail: () => { worker = null; onPage(spare).then(resolve, reject); } };
     worker.postMessage({ id, buf, opts, model: MODEL, feats: DATA.feats, regimes: DATA.regimes }, [buf]);
   });
 }
@@ -229,6 +250,7 @@ function unb64(buf) {
   return out.buffer;
 }
 const LIVE = {}, AGREE = {};
+let LOADERR = "";
 let loadState = { p: 0, msg: "Starting the model…" }, ready = null;
 function setLoad(p, msg) {
   loadState = { p, msg };
@@ -248,7 +270,8 @@ async function loadAll() {
     setLoad(1, `Model ready · ${(AGREE.A.rows + AGREE.B.rows).toLocaleString("en-GB")} minutes scored in this browser`);
   } catch (e) {
     for (const k of ks) { delete LIVE[k]; AGREE[k] = null; }
-    setLoad(1, "The model could not run here, so the replay uses the notebook's saved outputs.");
+    LOADERR = e && e.message ? e.message : String(e);
+    setLoad(1, "The model couldn't start here, so the app will show the notebook's saved results.");
     console.warn(e);
   }
 }

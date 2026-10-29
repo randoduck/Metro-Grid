@@ -408,6 +408,61 @@ function openAt(k, i, msg) {''')
 rep('''  $("story").innerHTML = `<b>Train ${k}, ${day}, ${time}.</b>Opened from the depot desk. Press Play to see what happened next, or pick a demo moment below.`;''',
     '''  $("story").innerHTML = `<b>${esc(META[k].name)}, ${day}, ${time}.</b>${msg || "Opened from the depot desk. Press Play to see what happened next, or pick a demo moment below."}`;''')
 
+
+# ---------------------------------------------------------------- plain-language copy (v5)
+COPY = [
+    ("<p>Early warning for metro air compressors. A model trained on healthy days watches every train and tells the depot when one starts to drift.</p>",
+     "<p>Every metro train has an air compressor that powers its brakes and doors. Metro Grid watches each one and warns the depot when it starts behaving differently from its healthy self.</p>"),
+    ('      <p class="note" style="margin:0">Demo sign-in for the FML mini-project: there is no password, and your name stays in this browser.</p>\n', ""),
+    ("Schematic network, not to scale. The datasets do not record which line each train ran on, so positions are illustrative. Each train's colour is the model's verdict on its real recording, played back at 1 hour per second. A train in alarm is held where it is until the alarm clears; a train on watch slows down.",
+     "The map is a simplified drawing, and the datasets don't say which line each train ran on, so the routes are just for show. The colours are real: each train replays its actual sensor recording at one hour per second. A train in alarm stops until the alarm clears, and a train on watch slows down."),
+    ("Watch: worse than 95% of healthy minutes</span>", "Watch: a bit unusual, keep an eye on it</span>"),
+    ("Alarm: the depot would be notified</span>", "Alarm: clearly unusual for 30 minutes, depot alerted</span>"),
+    ("Sensor check: data cannot be trusted</span>", "Sensor check: bad sensor readings, model paused</span>"),
+    ("No sensor data in the datasets</span>", "Empty slot: no train loaded yet</span>"),
+    ("Alerts arrive here the moment a train's recording reaches an alarm or a sensor fault in the replay. The actions are part of the demo and are not sent anywhere.",
+     "New alerts appear here as the replay reaches them. Acknowledge one to show you've seen it, or book the train in for a repair that night. This is a demo, so nothing is actually sent."),
+    ("Outcome compares each alarm with the reported failure times. Click a row to open that moment in the health monitor.",
+     "Outcome says whether a real reported failure happened close to the alarm. Click any row to see that moment inside the train."),
+    ("An autoencoder learns to rebuild the 14 physics features of a healthy compressor. It was trained only on Train A's healthy minutes, so it has never seen a failure. When a compressor starts behaving unlike its healthy self, the rebuild error grows. The error is smoothed over an hour, compared with the train's own healthy calibration minutes to give the health index, and turned into an alarm only if it stays high.",
+     "The model is an autoencoder: a small neural network that squeezes 14 measurements through a narrow middle layer and tries to rebuild them. We trained it only on minutes when Train A's compressor was healthy, so it gets very good at rebuilding healthy behaviour and bad at anything else. When a compressor starts to leak, the rebuild gets worse. That error, smoothed over an hour, becomes the health index, and a long stretch of high error becomes an alarm."),
+    ("This page runs the model itself. Every minute below was scored twice, once by the notebook in Colab and once here, and the two are compared.",
+     "The model runs inside this page. To show it is the same model as in our report, every minute was scored twice, once in the Colab notebook and once here, and the answers are compared below."),
+    ('<h2 style="margin-top:16px">Inputs</h2>\n        <div class="chips" id="featchips"></div>',
+     '<h2 style="margin-top:16px">What the model looks at</h2>\n        <p class="note" style="font-size:14px">Fourteen measurements worked out from the raw sensors every minute. Each one was picked because an air or oil leak changes it.</p>\n        <div id="featchips" style="display:grid;gap:8px;margin-top:8px"></div>'),
+    ("Load the per-minute feature file for a train, made in Colab by the notebook's <span class=\"mono\">export_train()</span>. The model runs here in your browser and the train joins the network.",
+     "Bring in another train. In Colab, run <span class=\"mono\">export_train()</span> on the train's raw sensor file to get a feature file, then load it here. The model checks every minute right here in your browser, and the train appears on the map."),
+    ("<legend>Healthy periods the model calibrates on</legend>", "<legend>When was this train healthy? The model learns what normal looks like from these days.</legend>"),
+    ("Use the periods marked in the file", "Use the healthy days saved in the file"),
+    ("Set the dates myself", "Pick the dates myself"),
+    ("Fit from<input", "Learn normal from<input"), ("Fit until<input", "Learn normal until<input"), ("Calibrate until<input", "Double-check until<input"),
+    ("<legend>Reported failure (optional)</legend>", "<legend>Known failure (optional). The depot desk will then show whether the model warned in time.</legend>"),
+    ("The model's verdict for every minute of the recording, computed in this browser. Play the recording and watch it classify each moment as healthy, watch, alarm or sensor check.",
+     "A look inside one train's air compressor (the APU). Press Play to run through the recording. Parts light up when the model finds something unusual there."),
+    ("The three physics features furthest from this train's healthy baseline right now. During a watch or alarm, their parts light up on the diagram.",
+     "The three measurements furthest from normal for this train right now. During a watch or alarm, the matching parts light up on the drawing."),
+    ("Four real failures cannot show how small a leak each detector can catch, so the notebook stretched real operating episodes in 12 healthy 24-hour windows to mimic a leak of known size. This was used for testing only, never for training.",
+     "A handful of real failures can't tell us how small a leak each model can spot. So the notebook added pretend leaks of a known size to 12 healthy days and counted how often each model caught them. This was only for testing; no model was trained on it."),
+    ("Injected leak, as a multiple of the normal pressure-loss rate", "Size of the pretend leak, compared with normal air loss"),
+    ("Data: the per-minute physics features exported by the project notebook. The model (an autoencoder on the 14 physics features, fitted only on Train A's healthy period, 1 Feb to 15 Mar 2020) runs in this browser; the monitor shows every fifth minute. On Train B it runs as a model the train has never seen.",
+     "Data: real per-minute sensor measurements from the MetroPT-3 (Train A, 2020) and MetroPT2 (Train B, 2022) datasets, prepared by our notebook. The model learned only from Train A's healthy days (1 Feb to 15 Mar 2020) and runs in this browser. It never saw Train B during training. The monitor draws every fifth minute."),
+    ("Watch: health index below 0.05, which means the compressor is behaving worse than 95% of healthy minutes. Alarm: the notebook's alarm rule (above the 99.5% healthy level for 80% of 30 minutes, blocked during sensor check). Failure times are the reported times from the dataset documentation. The supervised 24-hour classifier is not shown because it scored close to chance.",
+     "Watch means the health index is below 0.05: the compressor is doing worse than 95% of its healthy minutes. Alarm means the error stayed above the top 0.5% of healthy minutes for 24 of the last 30 minutes, with the sensors working. Failure times come from the datasets' own reports. We also tried a model that predicts failures 24 hours ahead, but it did no better than guessing, so it isn't shown here."),
+    ('  ok: "Behaving like the healthy period.",', '  ok: "Working the way it did on healthy days.",'),
+    ('  watch: "Worse than 95% of healthy minutes, but not yet the sustained deviation needed for an alarm.",', '  watch: "A bit unusual: worse than 95% of healthy minutes, but not for long enough to raise an alarm.",'),
+    ('  alarm: "Above the 99.5% healthy level for most of the last 30 minutes. The depot would be notified.",', '  alarm: "Clearly unusual for most of the last 30 minutes. The depot has been alerted.",'),
+    ('  sensor: "Sensor readings are frozen or impossible, so the model does not judge this minute.",', '  sensor: "The sensors are giving frozen or impossible readings, so the model is not judging this minute.",'),
+    ('  nodata: "Not enough valid history yet to compute the health index.",', '  nodata: "Not enough recent data yet to work out a health index.",'),
+    ('  network: ["Network", "Trains run around the network while the model watches each one\'s air production unit. Colour is the model\'s verdict on the train\'s real recording. Click a train to open its health monitor."],',
+     '  network: ["Network", "Each marker is a train. Its colour is what the model thinks of that train\'s air compressor: green is fine, yellow needs watching, red means the depot has been alerted and the train is held. Click a train to look inside."],'),
+    ('  depot: ["Depot desk", "Alerts the model sends to the depot, and every alarm it raised across the recordings."],',
+     '  depot: ["Depot desk", "The depot team\'s screen. Alerts from the model land in the inbox on the left. On the right is every alarm the model raised and whether a real failure followed."],'),
+    ('  model: ["Model", "What runs behind every colour on the map, and proof that this page computes the same answers as the notebook."],',
+     '  model: ["Model", "How the model decides, what it looks at, and a check that this page gives the same answers as our Python notebook."],'),
+]
+for a, b in COPY:
+    rep(a, b)
+
 # main script end: close startApp and append the new app code
 tail = s[s.rindex("requestAnimationFrame(netFrame);\n</script>"):]
 APPJS = (HERE / "mg_app.js").read_text()
