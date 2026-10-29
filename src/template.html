@@ -1,0 +1,967 @@
+<title>APU Health Monitor</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: depot control-room screen. Train + APU schematic left, live status right, replay timeline below, demo moments and injection test underneath. Single dark theme by choice. */
+:root {
+  color-scheme: dark;
+  --bg: #0D1318;
+  --panel: #141C23;
+  --panel2: #1B252E;
+  --line: #2A3743;
+  --fg: #E4EBF0;
+  --muted: #8C9BA8;
+  --accent: #45C4DB;
+  --car: #2B3843;
+  --car2: #364552;
+  --glass: #0F1A22;
+  --ok: #3DBE84;
+  --watch: #F0B429;
+  --alarm: #F2545B;
+  --sensor: #8796A5;
+  --nodata: #4E5C68;
+  --fail: rgba(242, 84, 91, 0.18);
+  --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --body: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+html, body { background: var(--bg); color: var(--fg); }
+body { font-family: var(--body); font-size: 15px; line-height: 1.45; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-block: 18px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 16px; }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; letter-spacing: 0.01em; margin: 0; text-wrap: balance; }
+h1 { font-size: 30px; line-height: 1.05; }
+h2 { font-size: 20px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px; }
+header p { margin: 4px 0 0; color: var(--muted); max-width: 60ch; }
+.trains { display: flex; gap: 8px; flex-wrap: wrap; }
+.trainbtn { font: inherit; text-align: left; background: var(--panel); color: var(--fg); border: 1.5px solid var(--line); border-radius: 8px; padding: 8px 14px; cursor: pointer; min-width: 0; }
+.trainbtn b { display: block; font-family: var(--display); font-size: 19px; font-weight: 600; }
+.trainbtn span { font-size: 12.5px; color: var(--muted); }
+.trainbtn[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.trainbtn:focus-visible, button:focus-visible, input:focus-visible, canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; min-width: 0; }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; }
+@media (max-width: 920px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.svgbox { width: 100%; overflow-x: auto; }
+svg#train { width: 100%; min-width: 560px; height: auto; display: block; }
+.side { display: grid; gap: 12px; align-content: start; }
+.clock { font-family: var(--mono); font-size: 14px; color: var(--muted); }
+.clock b { color: var(--fg); font-weight: 500; font-size: 17px; display: block; }
+.state { display: flex; align-items: center; gap: 12px; }
+.pill { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: 0.05em; text-transform: uppercase; padding: 4px 12px; border-radius: 6px; color: var(--bg); background: var(--ok); }
+.pill.watch { background: var(--watch); }
+.pill.alarm { background: var(--alarm); animation: blink 1.1s steps(2, start) infinite; }
+.pill.sensor { background: var(--sensor); }
+.pill.nodata { background: var(--nodata); color: var(--fg); }
+@keyframes blink { 50% { opacity: 0.55; } }
+.hi { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.hi b { display: block; font-size: 26px; color: var(--fg); font-weight: 500; }
+.bar { height: 8px; border-radius: 4px; background: var(--panel2); position: relative; overflow: hidden; }
+.bar i { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 4px; }
+.why { display: grid; gap: 6px; margin: 6px 0 0; padding: 0; list-style: none; }
+.why li { display: grid; gap: 1px; font-size: 14px; padding: 6px 8px; background: var(--panel2); border-radius: 6px; }
+.why li span { color: var(--muted); font-size: 11.5px; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.04em; }
+.note { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+.kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.kpi { background: var(--panel2); border-radius: 6px; padding: 8px; }
+.kpi b { font-family: var(--display); font-size: 24px; font-weight: 600; display: block; line-height: 1.1; }
+.kpi span { font-size: 12.5px; color: var(--muted); }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+.btn { font: 600 14px var(--body); background: var(--panel2); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+.btn.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); min-width: 78px; }
+.btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12.5px; color: var(--muted); margin-left: auto; }
+.legend i { display: inline-block; width: 12px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+canvas { display: block; width: 100%; cursor: crosshair; touch-action: none; }
+#tl { height: 190px; }
+#ov { height: 40px; margin-top: 8px; cursor: pointer; }
+.story { margin: 10px 0 0; padding: 10px 12px; background: var(--panel2); border-radius: 6px; font-size: 14.5px; max-width: 100%; }
+.story b { font-family: var(--display); font-size: 17px; font-weight: 600; margin-right: 6px; }
+.moments { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+@media (max-width: 920px) { .moments { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .moments { grid-template-columns: minmax(0, 1fr); } }
+.moment { font: inherit; text-align: left; color: var(--fg); background: var(--panel2); border: 1.5px solid var(--line); border-radius: 8px; padding: 10px; cursor: pointer; display: grid; gap: 4px; align-content: start; }
+.moment[aria-pressed="true"] { border-color: var(--accent); }
+.moment small { font-family: var(--mono); font-size: 11.5px; color: var(--accent); letter-spacing: 0.04em; }
+.moment b { font-family: var(--display); font-size: 18px; font-weight: 600; line-height: 1.1; }
+.moment span { font-size: 13px; color: var(--muted); }
+.inj { display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 18px; margin-top: 10px; }
+@media (max-width: 760px) { .inj { grid-template-columns: minmax(0, 1fr); } }
+.inj input[type=range] { width: 100%; accent-color: var(--accent); }
+.sev { font-family: var(--display); font-size: 40px; font-weight: 600; line-height: 1; }
+.rows { display: grid; gap: 5px; }
+.row { display: grid; grid-template-columns: 190px minmax(0, 1fr) 46px; gap: 8px; align-items: center; font-size: 13.5px; }
+@media (max-width: 480px) { .row { grid-template-columns: 130px minmax(0, 1fr) 40px; font-size: 12.5px; } }
+.row .track { height: 14px; background: var(--panel2); border-radius: 3px; position: relative; overflow: hidden; }
+.row .track i { position: absolute; inset: 0 auto 0 0; border-radius: 3px; transition: width 0.35s ease; }
+.row .v { font-family: var(--mono); text-align: right; }
+.f-generic { background: var(--sensor); }
+.f-physics { background: var(--accent); }
+.f-combined { background: var(--watch); }
+/* network map */
+.netgrid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; }
+@media (max-width: 920px) { .netgrid { grid-template-columns: minmax(0, 1fr); } }
+.mapbox { width: 100%; overflow-x: auto; }
+svg#net { width: 100%; min-width: 560px; height: auto; display: block; }
+.ln { fill: none; stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; opacity: 0.85; }
+.st { fill: var(--bg); stroke: var(--fg); stroke-width: 3; }
+.st.hub { stroke-width: 4; }
+.stn { font: 500 13px var(--body); fill: var(--muted); }
+.stn.hub { fill: var(--fg); font-weight: 600; }
+.tr { cursor: pointer; }
+.tr rect.body { fill: var(--panel2); stroke-width: 3.5; }
+.tr text { font: 700 14px var(--display); fill: var(--fg); letter-spacing: 0.04em; pointer-events: none; }
+.tr .halo { fill: none; stroke-width: 2; opacity: 0; }
+.tr.s-alarm .halo { opacity: 1; animation: halo 1.2s ease-out infinite; }
+@keyframes halo { from { r: 18; opacity: 0.9; } to { r: 42; opacity: 0; } }
+.tr.s-ok rect.body { stroke: var(--ok); } .tr.s-watch rect.body { stroke: var(--watch); } .tr.s-alarm rect.body { stroke: var(--alarm); }
+.tr.s-sensor rect.body { stroke: var(--sensor); stroke-dasharray: 5 4; } .tr.s-nodata rect.body { stroke: var(--nodata); }
+.tr.s-alarm .halo { stroke: var(--alarm); }
+.tr.idle { cursor: default; } .tr.idle rect.body { stroke: var(--nodata); fill: var(--bg); } .tr.idle text { fill: var(--muted); }
+.tr:focus-visible rect.body { outline: none; stroke: var(--accent); }
+.fleet { display: grid; gap: 10px; }
+.tcard { font: inherit; color: var(--fg); text-align: left; background: var(--panel2); border: 1.5px solid var(--line); border-radius: 8px; padding: 10px 12px; cursor: pointer; display: grid; gap: 6px; }
+.tcard:hover { border-color: var(--accent); }
+.tcard .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tcard b { font-family: var(--display); font-size: 20px; font-weight: 600; }
+.tcard .pill { font-size: 15px; padding: 2px 8px; }
+.tcard .meta { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.tcard .go { font-size: 13px; color: var(--accent); font-weight: 600; }
+.tabs { display: inline-flex; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 3px; gap: 3px; }
+.tab { font: 600 15px var(--body); color: var(--muted); background: none; border: 0; border-radius: 6px; padding: 7px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+.tab[aria-selected="true"] { background: var(--panel2); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line); }
+.badge { font: 600 12px var(--mono); background: var(--alarm); color: var(--bg); border-radius: 10px; padding: 1px 7px; min-width: 20px; text-align: center; }
+.headctl { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.tr .stopped { font: 700 11px var(--mono); fill: var(--alarm); letter-spacing: 0.06em; opacity: 0; }
+.tr.halted .stopped { opacity: 1; }
+.tr.halted rect.body { fill: #3A1C20; }
+.tcard .ev { font-size: 12.5px; color: var(--alarm); }
+.depot { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 920px) { .depot { grid-template-columns: minmax(0, 1fr); } }
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.tile b { font-family: var(--display); font-size: 34px; font-weight: 600; line-height: 1; display: block; font-variant-numeric: tabular-nums; }
+.tile span { font-size: 13px; color: var(--muted); }
+.inbox { display: grid; gap: 10px; margin-top: 10px; }
+.alert { background: var(--panel2); border-radius: 8px; padding: 10px 12px 10px 16px; position: relative; display: grid; gap: 6px; overflow: hidden; }
+.alert::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 5px; background: var(--alarm); }
+.alert.sensor::before { background: var(--sensor); }
+.alert.done { opacity: 0.62; }
+.alert .h { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; align-items: baseline; }
+.alert .h b { font-family: var(--display); font-size: 18px; font-weight: 600; }
+.alert .t { font: 12px var(--mono); color: var(--muted); }
+.alert .sig { font-size: 13.5px; color: var(--muted); }
+.alert .acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.alert .acts .btn { font-size: 13px; padding: 4px 10px; }
+.alert .st8 { font: 600 12px var(--mono); color: var(--ok); letter-spacing: 0.03em; }
+.empty { border: 1.5px dashed var(--line); border-radius: 8px; padding: 18px; color: var(--muted); font-size: 14px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip { font: 600 13px var(--body); background: var(--panel2); color: var(--muted); border: 1px solid var(--line); border-radius: 14px; padding: 3px 11px; cursor: pointer; }
+.chip[aria-pressed="true"] { color: var(--fg); border-color: var(--accent); }
+.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.tblwrap { overflow-x: auto; margin-top: 10px; max-height: 520px; overflow-y: auto; }
+.tbl th { text-align: left; font: 600 12px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; padding: 6px 8px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); }
+.tbl td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.tbl td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tbl tr.rowlink { cursor: pointer; } .tbl tr.rowlink:hover td { background: var(--panel2); }
+.oc { font: 600 12px var(--mono); padding: 2px 7px; border-radius: 4px; white-space: nowrap; display: inline-block; }
+.oc.before { background: var(--ok); color: var(--bg); } .oc.during { background: var(--watch); color: var(--bg); }
+.oc.after { background: var(--panel2); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line); } .oc.none { background: var(--panel2); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+.toast { position: fixed; z-index: 40; right: max(16px, calc(env(safe-area-inset-right, 0px) + 16px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); max-width: min(360px, calc(100vw - 32px)); background: var(--panel2); border: 1px solid var(--alarm); border-radius: 10px; padding: 12px 14px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); display: grid; gap: 6px; }
+.toast b { font-family: var(--display); font-size: 18px; font-weight: 600; color: var(--alarm); }
+.toast span { font-size: 14px; }
+.sheet { position: fixed; inset: 0; z-index: 50; background: var(--bg); overflow-y: auto; overscroll-behavior: contain; }
+.back { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding-block: 10px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.back .btn { font-size: 15px; }
+[hidden] { display: none !important; }
+footer { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+footer p { margin: 0 0 6px; max-width: 110ch; }
+/* train svg */
+.part rect.box, .part path.box, .part .tower { fill: var(--panel2); stroke-width: 3; transition: stroke 0.2s; }
+.part text.lbl { font: 600 17px var(--display); fill: var(--fg); letter-spacing: 0.03em; }
+.part text.val { font: 500 13px var(--mono); fill: var(--muted); }
+.part.s-ok .box, .part.s-ok .tower { stroke: var(--ok); }
+.part.s-watch .box, .part.s-watch .tower { stroke: var(--watch); }
+.part.s-alarm .box, .part.s-alarm .tower { stroke: var(--alarm); }
+.part.s-sensor .box, .part.s-sensor .tower { stroke: var(--sensor); stroke-dasharray: 7 5; }
+.part.s-nodata .box, .part.s-nodata .tower { stroke: var(--nodata); }
+.part.s-alarm .box { filter: drop-shadow(0 0 6px rgba(242, 84, 91, 0.7)); }
+.part .dot { stroke: var(--bg); stroke-width: 2; }
+.part.s-ok .dot { fill: var(--ok); } .part.s-watch .dot { fill: var(--watch); } .part.s-alarm .dot { fill: var(--alarm); }
+.part.s-sensor .dot { fill: var(--sensor); } .part.s-nodata .dot { fill: var(--nodata); }
+.pipe { stroke: var(--line); stroke-width: 9; fill: none; stroke-linecap: round; }
+.flow { stroke: var(--accent); stroke-width: 3; fill: none; stroke-dasharray: 2 12; stroke-linecap: round; opacity: 0; }
+.flowing .flow { opacity: 0.9; animation: flow 0.8s linear infinite; }
+@keyframes flow { to { stroke-dashoffset: -14; } }
+.sensorpt { fill: var(--bg); stroke: var(--muted); stroke-width: 1.5; }
+.tag { font: 500 11px var(--mono); fill: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .pill.alarm, .flowing .flow, .tr.s-alarm .halo { animation: none; } }
+</style>
+
+<div class="wrap" id="netpage">
+  <header>
+    <div>
+      <h1>Porto Metro APU Watch</h1>
+      <p>Trains run around the network while the early-warning model watches each one's air production unit. Marker colour is the model's live verdict from the real recording. Click a train to open its health monitor.</p>
+    </div>
+    <div class="headctl">
+      <div class="tabs" role="tablist" aria-label="Views">
+        <button class="tab" role="tab" id="tab-network" aria-selected="true" aria-controls="view-network">Network map</button>
+        <button class="tab" role="tab" id="tab-depot" aria-selected="false" aria-controls="view-depot">Depot desk <span class="badge" id="badge" hidden>0</span></button>
+      </div>
+      <button class="btn" id="netplay" aria-pressed="true">Pause replay</button>
+    </div>
+  </header>
+  <div class="netgrid" id="view-network" role="tabpanel" aria-labelledby="tab-network">
+    <div class="panel">
+      <div class="mapbox">
+      <svg id="net" viewBox="0 0 1000 560" role="img" aria-label="Schematic metro network with moving trains">
+        <path id="L1" class="ln" style="stroke:#4C8DDB" d="M90 70 L330 200 L520 300 L840 300 L930 170"/>
+        <path id="L2" class="ln" style="stroke:#D9534F" d="M520 50 L520 520"/>
+        <path id="L3" class="ln" style="stroke:#4CAF7A" d="M330 200 L230 300 L130 400"/>
+        <path id="L4" class="ln" style="stroke:#E59A3A" d="M520 300 L640 410 L820 450"/>
+        <g id="stations"></g>
+        <g id="trains"></g>
+      </svg>
+      </div>
+      <p class="note">Schematic network, not to scale. The datasets do not record which line each train ran on, so positions are illustrative. The colour of Trains A and B is the model's real verdict, replayed from the recording at 1 hour per second. A train in alarm is held where it is until the alarm clears; a train on watch slows down.</p>
+    </div>
+    <aside class="side">
+      <div class="panel">
+        <h2>Fleet</h2>
+        <div class="fleet" id="fleet" style="margin-top:8px"></div>
+      </div>
+      <div class="panel">
+        <h2>Marker colours</h2>
+        <div class="legend" style="margin:8px 0 0;display:grid;gap:6px">
+          <span><i style="background:var(--ok)"></i>Healthy</span>
+          <span><i style="background:var(--watch)"></i>Watch: worse than 95% of healthy minutes</span>
+          <span><i style="background:var(--alarm)"></i>Alarm: the depot would be notified</span>
+          <span><i style="background:var(--sensor)"></i>Sensor check: data cannot be trusted</span>
+          <span><i style="background:var(--nodata)"></i>No sensor data in the datasets</span>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div id="view-depot" role="tabpanel" aria-labelledby="tab-depot" hidden style="display:grid;gap:16px">
+    <div class="tiles">
+      <div class="tile"><b id="k-new">0</b><span>new alerts waiting</span></div>
+      <div class="tile"><b id="k-ack">0</b><span>acknowledged</span></div>
+      <div class="tile"><b id="k-book">0</b><span>overnight repairs booked</span></div>
+    </div>
+    <div class="depot">
+      <section class="panel" aria-label="Live inbox">
+        <h2>Live inbox</h2>
+        <p class="note" style="margin-top:4px">Alerts arrive here the moment a train's recording reaches an alarm or a sensor fault in the replay. The actions are part of the demo and are not sent anywhere.</p>
+        <div class="inbox" id="inbox"></div>
+      </section>
+      <section class="panel" aria-label="Alarm history">
+        <h2>Alarm history from the recordings</h2>
+        <p class="note" style="margin-top:4px" id="histsum"></p>
+        <div class="chips" id="chips">
+          <button class="chip" data-f="all" aria-pressed="true">All</button>
+          <button class="chip" data-f="A" aria-pressed="false">Train A</button>
+          <button class="chip" data-f="B" aria-pressed="false">Train B</button>
+          <button class="chip" data-f="before" aria-pressed="false">Warned before a failure</button>
+        </div>
+        <div class="tblwrap"><table class="tbl"><thead><tr><th>Train</th><th>Alarm started</th><th>Length</th><th>Part</th><th>Outcome</th></tr></thead><tbody id="hist"></tbody></table></div>
+        <p class="note">Outcome compares each alarm with the reported failure times. Click a row to open that moment in the health monitor.</p>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden role="status" aria-live="polite"><b id="toastt">Depot notified</b><span id="toastm"></span><div><button class="btn" id="toastgo">View in depot desk</button> <button class="btn" id="toastx">Dismiss</button></div></div>
+
+<div class="sheet" id="sheet" hidden>
+<div class="back"><button class="btn" id="closesheet">← Back to network</button></div>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>APU Health Monitor</h1>
+      <p>Replay of the early-warning model on real Porto Metro compressor data. Pick a train, play the recording, and watch the model classify each moment as healthy, watch, alarm or sensor check.</p>
+    </div>
+    <div class="trains" role="group" aria-label="Choose a train">
+      <button class="trainbtn" id="btnA" aria-pressed="true"><b>Train A</b><span>MetroPT-3 · Feb–Sep 2020 · 4 air leaks</span></button>
+      <button class="trainbtn" id="btnB" aria-pressed="false"><b>Train B</b><span>MetroPT2 · Apr–Jul 2022 · air + oil leak</span></button>
+    </div>
+  </header>
+
+  <div class="main">
+    <div class="panel">
+      <div class="svgbox">
+      <svg id="train" viewBox="0 0 1000 560" role="img" aria-label="Train with its air production unit and the model's status for each part">
+        <!-- rail and car -->
+        <line x1="20" y1="206" x2="980" y2="206" stroke="var(--line)" stroke-width="4"/>
+        <g id="panto" stroke="var(--muted)" stroke-width="2.5" fill="none">
+          <path d="M400 56 L430 22 L470 22 L440 56"/><line x1="420" y1="20" x2="485" y2="20"/>
+        </g>
+        <rect x="360" y="48" width="150" height="10" rx="3" fill="var(--car2)"/>
+        <path d="M58 58 H862 Q912 58 934 96 L950 140 Q956 168 930 168 H58 Q42 168 42 152 V74 Q42 58 58 58 Z" fill="var(--car)" stroke="var(--car2)" stroke-width="2"/>
+        <path d="M884 70 Q912 72 926 100 L936 124 H884 Z" fill="var(--glass)"/>
+        <g fill="var(--glass)">
+          <rect x="70" y="74" width="56" height="40" rx="4"/><rect x="138" y="74" width="56" height="40" rx="4"/>
+          <rect x="282" y="74" width="56" height="40" rx="4"/><rect x="350" y="74" width="56" height="40" rx="4"/><rect x="418" y="74" width="56" height="40" rx="4"/>
+          <rect x="572" y="74" width="56" height="40" rx="4"/><rect x="640" y="74" width="56" height="40" rx="4"/><rect x="708" y="74" width="56" height="40" rx="4"/>
+        </g>
+        <g fill="var(--car2)" stroke="var(--glass)" stroke-width="2">
+          <rect x="214" y="70" width="52" height="94" rx="3"/><rect x="494" y="70" width="52" height="94" rx="3"/><rect x="788" y="70" width="52" height="94" rx="3"/>
+        </g>
+        <g stroke="var(--glass)" stroke-width="2"><line x1="240" y1="70" x2="240" y2="164"/><line x1="520" y1="70" x2="520" y2="164"/><line x1="814" y1="70" x2="814" y2="164"/></g>
+        <rect x="42" y="132" width="896" height="6" fill="var(--accent)" opacity="0.55"/>
+        <text id="carlabel" x="70" y="156" class="tag" style="font-size:12px">TRAIN A · METROPT-3</text>
+        <rect x="60" y="168" width="870" height="8" fill="#1A232B"/>
+        <g fill="#1A232B" stroke="var(--car2)" stroke-width="2">
+          <rect x="130" y="174" width="120" height="16" rx="4"/><rect x="740" y="174" width="120" height="16" rx="4"/>
+        </g>
+        <g fill="var(--bg)" stroke="var(--muted)" stroke-width="3">
+          <circle cx="158" cy="192" r="13"/><circle cx="222" cy="192" r="13"/><circle cx="768" cy="192" r="13"/><circle cx="832" cy="192" r="13"/>
+        </g>
+        <rect id="apubox" x="420" y="172" width="170" height="26" rx="4" fill="var(--panel2)" stroke="var(--accent)" stroke-width="2.5" stroke-dasharray="6 4"/>
+        <text x="505" y="190" text-anchor="middle" class="tag" style="fill:var(--accent);font-size:12px">APU</text>
+        <path d="M420 198 L30 240 M590 198 L970 240" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="4 5" fill="none" opacity="0.7"/>
+        <rect x="30" y="240" width="940" height="310" rx="10" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+        <text x="46" y="264" class="tag" style="font-size:12px">AIR PRODUCTION UNIT · UNDER-FLOOR</text>
+
+        <!-- pipes -->
+        <g id="pipes">
+          <path class="pipe" d="M250 355 H330"/><path class="pipe" d="M450 355 H520"/><path class="pipe" d="M670 355 H740"/>
+          <path class="flow" d="M250 355 H330"/><path class="flow" d="M450 355 H520"/><path class="flow" d="M670 355 H740"/>
+          <path class="pipe" d="M165 410 V440" style="stroke-width:6"/>
+          <path d="M595 440 V400 M595 510 Q595 530 400 530 Q165 530 165 510 M670 475 Q850 475 845 410" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="3 4" fill="none"/>
+        </g>
+
+        <g class="part s-ok" id="p-comp">
+          <rect class="box" x="80" y="300" width="170" height="110" rx="10"/>
+          <circle cx="132" cy="358" r="24" fill="none" stroke="var(--muted)" stroke-width="2"/>
+          <path d="M120 358 h24 M132 346 v24" stroke="var(--muted)" stroke-width="2"/>
+          <rect x="166" y="342" width="62" height="32" rx="5" fill="none" stroke="var(--muted)" stroke-width="2"/>
+          <path d="M172 358 q8 -12 16 0 t16 0 t16 0" stroke="var(--muted)" stroke-width="2" fill="none"/>
+          <circle class="dot" cx="236" cy="314" r="7"/>
+          <text class="lbl" x="92" y="326">Compressor</text>
+          <text class="val" id="v-comp" x="92" y="400">— A · —</text>
+        </g>
+        <g class="part s-ok" id="p-oil">
+          <rect class="box" x="80" y="440" width="170" height="70" rx="10"/>
+          <path d="M150 498 q10 -7 20 0 t20 0 t20 0 t20 0" stroke="var(--muted)" stroke-width="2" fill="none" opacity="0.7"/>
+          <circle class="dot" cx="236" cy="454" r="7"/>
+          <text class="lbl" x="92" y="464">Oil sump</text>
+          <text class="val" id="v-oil" x="92" y="502">— °C</text>
+        </g>
+        <g class="part s-ok" id="p-dryer">
+          <rect class="box" x="330" y="290" width="120" height="140" rx="10"/>
+          <rect class="tower" x="350" y="330" width="34" height="74" rx="14" style="stroke-width:2"/>
+          <rect class="tower" x="396" y="330" width="34" height="74" rx="14" style="stroke-width:2"/>
+          <circle class="dot" cx="436" cy="304" r="7"/>
+          <text class="lbl" x="342" y="316">Air dryer</text>
+          <text class="val" x="342" y="422">2 towers</text>
+        </g>
+        <g class="part s-ok" id="p-panel">
+          <rect class="box" x="520" y="300" width="150" height="100" rx="10"/>
+          <g stroke="var(--muted)" stroke-width="2" fill="none"><circle cx="560" cy="360" r="14"/><circle cx="600" cy="360" r="14"/><path d="M560 360 l6 -8 M600 360 l-5 -9"/></g>
+          <circle class="dot" cx="656" cy="314" r="7"/>
+          <text class="lbl" x="532" y="326">Pneumatic panel</text>
+          <text class="val" x="532" y="392">TP3</text>
+        </g>
+        <g class="part s-ok" id="p-res">
+          <rect class="box" x="740" y="300" width="210" height="110" rx="50"/>
+          <clipPath id="resclip"><rect x="742" y="302" width="206" height="106" rx="48"/></clipPath>
+          <rect id="reslevel" x="742" y="340" width="206" height="70" fill="var(--accent)" opacity="0.18" clip-path="url(#resclip)"/>
+          <circle class="dot" cx="925" cy="318" r="7"/>
+          <text class="lbl" x="772" y="342">Main reservoir</text>
+          <text class="val" id="v-res" x="772" y="388" style="font-size:22px;fill:var(--fg)">— bar</text>
+        </g>
+        <g class="part s-ok" id="p-log">
+          <rect class="box" x="520" y="440" width="150" height="70" rx="10"/>
+          <circle class="dot" cx="656" cy="454" r="7"/>
+          <text class="lbl" x="532" y="464">Data logger</text>
+          <text class="val" id="v-log" x="532" y="498">sensors ok</text>
+        </g>
+        <!-- sensor tags -->
+        <circle class="sensorpt" cx="290" cy="355" r="5"/><text class="tag" x="276" y="340">TP2</text>
+        <circle class="sensorpt" cx="695" cy="355" r="5"/><text class="tag" x="681" y="340">TP3</text>
+        <circle class="sensorpt" cx="100" cy="430" r="4"/><text class="tag" x="108" y="434">oil temp</text>
+        <circle class="sensorpt" cx="132" cy="296" r="4"/><text class="tag" x="140" y="292">motor current</text>
+      </svg>
+      </div>
+      <p class="story" id="story"></p>
+    </div>
+
+    <aside class="side">
+      <div class="panel">
+        <div class="clock" id="clock"><b>—</b>—</div>
+        <div class="state" style="margin-top:10px">
+          <span class="pill" id="pill">Healthy</span>
+          <div class="hi">Health index<b id="hiv">—</b></div>
+        </div>
+        <div class="bar" style="margin-top:10px"><i id="hibar" style="width:50%"></i></div>
+        <p class="note" id="statenote"></p>
+      </div>
+      <div class="panel">
+        <h2>Most unusual signals</h2>
+        <ul class="why" id="why"></ul>
+        <p class="note">The three physics features furthest from this train's healthy baseline right now. During a watch or alarm, their parts light up on the diagram.</p>
+      </div>
+      <div class="panel">
+        <h2>On record for this train</h2>
+        <div class="kpis" id="kpis" style="margin-top:8px"></div>
+      </div>
+    </aside>
+  </div>
+
+  <section class="panel" aria-label="Replay timeline">
+    <div class="controls">
+      <button class="btn primary" id="play">Play</button>
+      <button class="btn" data-speed="1">1 h/s</button>
+      <button class="btn" data-speed="6" aria-pressed="true">6 h/s</button>
+      <button class="btn" data-speed="24">1 day/s</button>
+      <div class="legend">
+        <span><i style="background:var(--accent)"></i>health index</span>
+        <span><i style="background:var(--alarm)"></i>alarm</span>
+        <span><i style="background:var(--fail);outline:1px solid var(--alarm)"></i>reported failure</span>
+        <span><i style="background:var(--sensor)"></i>sensor check</span>
+      </div>
+    </div>
+    <canvas id="tl" tabindex="0" aria-label="Health index timeline. Click or use arrow keys to move the playhead."></canvas>
+    <canvas id="ov" aria-label="Whole recording overview. Click to jump."></canvas>
+    <h2 style="margin-top:16px">Demo moments</h2>
+    <div class="moments" id="moments"></div>
+  </section>
+
+  <section class="panel" id="injpanel" aria-label="Leak injection test">
+    <h2>Leak injection test · Train A</h2>
+    <p class="note" style="margin-top:4px;max-width:80ch">Four real failures cannot show how small a leak each detector can catch, so the notebook stretched real operating episodes in 12 healthy 24-hour windows to mimic a leak of known size. This was used for testing only, never for training.</p>
+    <div class="inj">
+      <div>
+        <label for="sev" class="muted" style="font-size:13px">Injected leak, as a multiple of the normal pressure-loss rate</label>
+        <div class="sev mono" id="sevv">1×</div>
+        <input type="range" id="sev" min="0" max="5" step="1" value="3">
+        <p class="note" id="sevnote"></p>
+      </div>
+      <div class="rows" id="injrows"></div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Data: the per-minute export from section 14 of the project notebook (Colab run, 22 Oct 2026), sampled every 5 minutes. The model is the autoencoder on the 14 physics features, fitted only on Train A's healthy period (1 Feb to 15 Mar 2020). On Train B it runs as a model the train has never seen.</p>
+    <p>Watch: health index below 0.05, which means the compressor is behaving worse than 95% of healthy minutes. Alarm: the notebook's alarm rule (above the 99.5% healthy level for 80% of 30 minutes, blocked during sensor check). Failure times are the reported times from the dataset documentation. The supervised 24-hour classifier is not shown because it scored close to chance.</p>
+  </footer>
+</div>
+</div>
+
+<script>
+const DATA = __DATA__;
+const NICE = {
+  off_decay_rate_60min: ["Pressure drop while off (1 h)", "res"],
+  off_decay_rate_360min: ["Pressure drop while off (6 h)", "res"],
+  decay_cusum: ["Drift in pressure drop (CUSUM)", "res"],
+  decay_ewma_z: ["Drift in pressure drop (EWMA)", "res"],
+  load_rise_rate_60min: ["Pressure rise while pumping (1 h)", "comp"],
+  load_rise_rate_360min: ["Pressure rise while pumping (6 h)", "comp"],
+  duty_loaded_60min: ["Time spent pumping (1 h)", "comp"],
+  duty_loaded_360min: ["Time spent pumping (6 h)", "comp"],
+  load_cycles_per_h_60min: ["Compressor starts per hour (1 h)", "comp"],
+  load_cycles_per_h_360min: ["Compressor starts per hour (6 h)", "comp"],
+  refill_minutes_360min: ["Minutes to refill reservoir", "comp"],
+  oil_temp_excess: ["Oil hotter than load explains", "oil"],
+  tp2_tp3_loaded_60min: ["Pressure loss across dryer", "dryer"],
+  tp3_res_gap_60min: ["Panel vs reservoir gap", "panel"],
+};
+const PARTNAME = { res: "Reservoir", comp: "Compressor", oil: "Oil sump", dryer: "Air dryer", panel: "Panel" };
+const KPIS = {
+  A: [["1 of 4", "failures warned in the 24 h before"], ["10.3 h", "lead time before A-E4"], ["3 of 4", "failures with an alarm during the leak"], ["0.71", "false alarms per week"]],
+  B: [["0 of 2", "warned by this Train A model"], ["1 of 2", "alarmed during (oil leak B-E2)"], ["22.8 h", "warning before B-E2 from the model fitted on both trains"], ["1.74", "false alarms per week for that model"]],
+};
+const MOMENTS = [
+  { u: "A", from: "2020-07-14T12:00", to: "2020-07-15T22:00", at: "2020-07-15T05:00", tag: "01 · TRAIN A", title: "Early warning before A-E4",
+    sub: "Alarm 10.3 h before the reported leak",
+    story: "The alarm switches on at 04:11 on 15 July and the air leak is reported at 14:30, 10.3 hours later. The compressor lights up because it is starting far more often than usual to keep up with the leaking air. This is the one failure on Train A that got a warning in advance." },
+  { u: "B", from: "2022-07-10T00:00", to: "2022-07-14T18:00", at: "2022-07-13T20:00", tag: "02 · TRAIN B", title: "Oil leak on a new train",
+    sub: "A model from Train A, used on Train B",
+    story: "This model never saw Train B's data during training. It gives a short alarm during the oil leak, with the reservoir's pressure drop as the main signal, but no advance warning. A model fitted on healthy data from both trains did better and warned 22.8 hours ahead. That model is in the report's cross-dataset results, not in this replay." },
+  { u: "A", from: "2020-04-16T18:00", to: "2020-04-19T06:00", at: "2020-04-17T14:00", tag: "03 · TRAIN A", title: "Frozen sensors before A-E1",
+    sub: "Sensor check stops false alarms",
+    story: "For most of the day before failure A-E1 the data logger froze. The sensor check greys these minutes out, so a dead sensor can never be mistaken for a leak. The cost is that the model has almost nothing to judge, which is why A-E1 got no advance warning." },
+  { u: "A", from: "2020-06-04T12:00", to: "2020-06-07T20:00", at: "2020-06-07T02:00", tag: "04 · TRAIN A", title: "Why did it alarm? A-E3",
+    sub: "Explanation shown on the parts",
+    story: "There was no warning before A-E3, but once the leak develops the alarm holds for hours. The explanation points at the compressor: it spends much longer pumping and takes longer to refill the reservoir, which is what an air leak does." },
+  { u: "A", inj: true, tag: "05 · TEST", title: "Leak injection test", sub: "How small a leak can it catch?",
+    story: "Use the slider in the leak injection panel below to choose a leak size and see how often each detector caught it across 12 healthy days." },
+];
+
+const $ = (id) => document.getElementById(id);
+const state = { u: "A", i: 0, a: 0, b: 0, playing: false, speed: 6, moment: 0 };
+const U = {};
+for (const k of ["A", "B"]) {
+  const d = DATA.units[k];
+  const mins = new Int32Array(d.m.length); let acc = 0;
+  for (let j = 0; j < d.m.length; j++) { acc += d.m[j]; mins[j] = acc; }
+  U[k] = { ...d, mins, t0ms: Date.parse(d.t0 + "Z"),
+    ev: d.events.map((e) => ({ ...e, s: (Date.parse(e.start + "Z") - Date.parse(d.t0 + "Z")) / 60000, e: (Date.parse(e.end + "Z") - Date.parse(d.t0 + "Z")) / 60000 })) };
+}
+const minOf = (k, iso) => (Date.parse(iso + ":00Z") - U[k].t0ms) / 60000;
+function idxAt(k, m) {
+  const a = U[k].mins; let lo = 0, hi = a.length - 1;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (a[mid] < m) lo = mid + 1; else hi = mid; }
+  return lo;
+}
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const p2 = (n) => String(n).padStart(2, "0");
+function fmt(k, m, short) {
+  const d = new Date(U[k].t0ms + m * 60000);
+  if (short) return `${d.getUTCDate()} ${MON[d.getUTCMonth()]} ${p2(d.getUTCHours())}:00`;
+  return [`${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`, `${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}`];
+}
+function status(k, i) {
+  const d = U[k];
+  if (!d.S[i]) return "sensor";
+  if (d.A[i]) return "alarm";
+  if (d.H[i] === null) return "nodata";
+  return d.H[i] < 50 ? "watch" : "ok";
+}
+const LABEL = { ok: "Healthy", watch: "Watch", alarm: "Alarm", sensor: "Sensor check", nodata: "Warming up" };
+const NOTE = {
+  ok: "Behaving like the healthy period.",
+  watch: "Worse than 95% of healthy minutes, but not yet the sustained deviation needed for an alarm.",
+  alarm: "Above the 99.5% healthy level for most of the last 30 minutes. The depot would be notified.",
+  sensor: "Sensor readings are frozen or impossible, so the model does not judge this minute.",
+  nodata: "Not enough valid history yet to compute the health index.",
+};
+
+function render() {
+  const k = state.u, d = U[k], i = state.i, st = status(k, i);
+  const [day, time] = fmt(k, d.mins[i]);
+  $("clock").innerHTML = `<b>${time}</b>${day}`;
+  const pill = $("pill"); pill.className = "pill " + st; pill.textContent = LABEL[st];
+  $("statenote").textContent = NOTE[st];
+  const h = d.H[i];
+  $("hiv").textContent = h === null ? "—" : (h / 1000).toFixed(3);
+  $("hibar").style.width = h === null ? "0%" : (h / 10).toFixed(1) + "%";
+  $("hibar").style.background = st === "ok" ? "var(--accent)" : `var(--${st === "nodata" ? "nodata" : st})`;
+  // why
+  const w = d.W[i], ws = [Math.floor(w / 196), Math.floor(w / 14) % 14, w % 14].map((j) => DATA.feats[j]);
+  $("why").innerHTML = ws.map((f) => `<li><span>${PARTNAME[NICE[f][1]]}</span>${NICE[f][0]}</li>`).join("");
+  // parts
+  const hot = new Set(ws.map((f) => NICE[f][1]));
+  for (const p of ["comp", "oil", "dryer", "panel", "res"]) {
+    let s = "ok";
+    if (st === "sensor") s = "sensor"; else if (st === "nodata") s = "nodata";
+    else if ((st === "alarm" || st === "watch") && hot.has(p)) s = st;
+    $("p-" + p).setAttribute("class", "part s-" + s);
+  }
+  $("p-log").setAttribute("class", "part s-" + (d.S[i] ? "ok" : "alarm"));
+  $("v-log").textContent = d.S[i] ? "sensors ok" : "sensor check";
+  const R = d.R[i], I = d.I[i], O = d.O[i], reg = DATA.regimes[d.G[i]];
+  $("v-res").textContent = R === null ? "— bar" : (R / 100).toFixed(2) + " bar";
+  $("v-comp").textContent = (I === null ? "— A" : (I / 100).toFixed(2) + " A") + " · " + reg;
+  $("v-oil").textContent = O === null ? "— °C" : (O / 10).toFixed(1) + " °C";
+  const lvl = R === null ? 0 : Math.max(0, Math.min(1, R / 100 / 10.5));
+  $("reslevel").setAttribute("y", 408 - 106 * lvl); $("reslevel").setAttribute("height", 106 * lvl);
+  $("pipes").setAttribute("class", reg === "loaded" ? "flowing" : "");
+  drawTL(); drawOV();
+}
+
+function setupCanvas(c) {
+  const r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const W = Math.max(1, Math.round(r.width * dpr)), H = Math.max(1, Math.round(r.height * dpr));
+  if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
+  const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return [g, r.width, r.height];
+}
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const PAD = { l: 40, r: 10, t: 14, b: 24 };
+function drawTL() {
+  const c = $("tl"), [g, W, H] = setupCanvas(c), k = state.u, d = U[k];
+  const ma = d.mins[state.a], mb = d.mins[state.b], pw = W - PAD.l - PAD.r, ph = H - PAD.t - PAD.b;
+  const X = (m) => PAD.l + ((m - ma) / (mb - ma)) * pw, Y = (v) => PAD.t + (1 - v) * ph;
+  g.clearRect(0, 0, W, H);
+  g.font = "11px " + css("--mono"); g.textBaseline = "middle";
+  // grid
+  g.strokeStyle = css("--line"); g.fillStyle = css("--muted"); g.lineWidth = 1;
+  for (const v of [0, 0.5, 1]) { g.beginPath(); g.moveTo(PAD.l, Y(v)); g.lineTo(W - PAD.r, Y(v)); g.stroke(); g.textAlign = "right"; g.fillText(v.toFixed(1), PAD.l - 6, Y(v)); }
+  // failures
+  for (const e of d.ev) {
+    if (e.e < ma || e.s > mb) continue;
+    const x1 = Math.max(PAD.l, X(e.s)), x2 = Math.min(W - PAD.r, X(e.e));
+    g.fillStyle = css("--fail"); g.fillRect(x1, PAD.t, Math.max(2, x2 - x1), ph);
+    g.strokeStyle = css("--alarm"); g.beginPath(); g.moveTo(x1, PAD.t); g.lineTo(x1, PAD.t + ph); g.stroke();
+    g.fillStyle = css("--alarm"); g.textAlign = "left"; g.fillText(`${e.id} ${e.kind}`, x1 + 4, PAD.t + 8);
+  }
+  // sensor check + alarms
+  const step = Math.max(1, pw / (state.b - state.a + 1));
+  for (let j = state.a; j <= state.b; j++) {
+    const x = X(d.mins[j]);
+    if (!d.S[j]) { g.fillStyle = css("--sensor"); g.globalAlpha = 0.28; g.fillRect(x, PAD.t, step + 0.5, ph); g.globalAlpha = 1; }
+    if (d.A[j]) { g.fillStyle = css("--alarm"); g.fillRect(x, PAD.t + ph - 8, step + 0.5, 8); }
+  }
+  // watch threshold
+  g.setLineDash([4, 4]); g.strokeStyle = css("--watch"); g.beginPath(); g.moveTo(PAD.l, Y(0.05)); g.lineTo(W - PAD.r, Y(0.05)); g.stroke(); g.setLineDash([]);
+  // HI line
+  g.strokeStyle = css("--accent"); g.lineWidth = 1.6; g.beginPath(); let pen = false;
+  for (let j = state.a; j <= state.b; j++) {
+    const h = d.H[j], gap = j > state.a && d.mins[j] - d.mins[j - 1] > 30;
+    if (h === null || !d.S[j] || gap) { pen = false; if (h === null || !d.S[j]) continue; }
+    const x = X(d.mins[j]), y = Y(h / 1000);
+    if (pen) g.lineTo(x, y); else { g.moveTo(x, y); pen = true; }
+  }
+  g.stroke();
+  // time ticks
+  const pxPerH = pw / ((mb - ma) / 60), stepH = [3, 6, 12, 24, 48, 96, 168].find((h) => h * pxPerH >= 95) || 336;
+  g.fillStyle = css("--muted"); g.textAlign = "center";
+  const first = Math.ceil((U[k].t0ms / 60000 + ma) / (stepH * 60)) * stepH * 60 - U[k].t0ms / 60000;
+  for (let m = first; m <= mb; m += stepH * 60) { const x = X(m); if (x < PAD.l + 20 || x > W - PAD.r - 20) continue; g.fillText(fmt(k, m, true), x, H - 10); }
+  // playhead
+  const xp = X(d.mins[state.i]);
+  g.strokeStyle = css("--fg"); g.lineWidth = 1.5; g.beginPath(); g.moveTo(xp, PAD.t - 6); g.lineTo(xp, PAD.t + ph); g.stroke();
+  g.fillStyle = css("--fg"); g.beginPath(); g.moveTo(xp - 5, PAD.t - 8); g.lineTo(xp + 5, PAD.t - 8); g.lineTo(xp, PAD.t - 2); g.fill();
+}
+const OVC = {};
+function drawOV() {
+  const c = $("ov"), [g, W, H] = setupCanvas(c), k = state.u, d = U[k], n = d.mins.length, M = d.mins[n - 1];
+  const X = (m) => PAD.l + (m / M) * (W - PAD.l - PAD.r);
+  g.clearRect(0, 0, W, H);
+  g.fillStyle = css("--panel2"); g.fillRect(PAD.l, 0, W - PAD.l - PAD.r, H);
+  const cols = Math.max(1, Math.floor(W - PAD.l - PAD.r));
+  const key = k + cols;
+  if (!OVC[key]) {
+    const lo = new Float32Array(cols).fill(2), al = new Uint8Array(cols), sc = new Uint8Array(cols);
+    for (let j = 0; j < n; j++) {
+      const p = Math.min(cols - 1, Math.floor((d.mins[j] / M) * cols));
+      if (d.H[j] !== null && d.S[j]) lo[p] = Math.min(lo[p], d.H[j] / 1000);
+      if (d.A[j]) al[p] = 1; if (!d.S[j]) sc[p] = 1;
+    }
+    OVC[key] = { lo, al, sc };
+  }
+  const { lo, al, sc } = OVC[key];
+  for (let p = 0; p < cols; p++) {
+    const x = PAD.l + p;
+    if (sc[p] && lo[p] > 1) { g.fillStyle = css("--sensor"); g.globalAlpha = 0.4; g.fillRect(x, 0, 1, H); g.globalAlpha = 1; continue; }
+    if (lo[p] <= 1) { g.fillStyle = al[p] ? css("--alarm") : css("--accent"); g.globalAlpha = al[p] ? 1 : 0.55; const hh = (1 - lo[p]) * (H - 4); g.fillRect(x, H - hh, 1, hh); g.globalAlpha = 1; }
+  }
+  for (const e of d.ev) { g.fillStyle = css("--alarm"); g.fillRect(X(e.s) - 1, 0, Math.max(3, X(e.e) - X(e.s)), 4); }
+  g.strokeStyle = css("--fg"); g.lineWidth = 1.5; g.strokeRect(X(d.mins[state.a]), 0.75, Math.max(3, X(d.mins[state.b]) - X(d.mins[state.a])), H - 1.5);
+  g.fillStyle = css("--muted"); g.font = "11px " + css("--mono"); g.textAlign = "right"; g.textBaseline = "middle"; g.fillText("all", PAD.l - 6, H / 2);
+}
+
+function setUnit(k) {
+  state.u = k;
+  $("btnA").setAttribute("aria-pressed", k === "A"); $("btnB").setAttribute("aria-pressed", k === "B");
+  $("carlabel").textContent = k === "A" ? "TRAIN A · METROPT-3" : "TRAIN B · METROPT2";
+  $("kpis").innerHTML = KPIS[k].map(([v, l]) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join("");
+}
+function view(k, fromIso, toIso, atIso) {
+  setUnit(k);
+  state.a = idxAt(k, minOf(k, fromIso)); state.b = idxAt(k, minOf(k, toIso)); state.i = idxAt(k, minOf(k, atIso));
+  render();
+}
+function pickMoment(j) {
+  state.moment = j; const mo = MOMENTS[j];
+  document.querySelectorAll(".moment").forEach((b, n) => b.setAttribute("aria-pressed", n === j));
+  $("story").innerHTML = `<b>${mo.title}.</b>${mo.story}`;
+  if (mo.inj) { $("injpanel").scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+  stop(); view(mo.u, mo.from, mo.to, mo.at);
+}
+function pickTrain(k) {
+  if (state.u === k) return;
+  stop();
+  const j = MOMENTS.findIndex((m) => m.u === k && !m.inj);
+  pickMoment(j);
+}
+$("moments").innerHTML = MOMENTS.map((m, j) => `<button class="moment" aria-pressed="false" data-j="${j}"><small>${m.tag}</small><b>${m.title}</b><span>${m.sub}</span></button>`).join("");
+document.querySelectorAll(".moment").forEach((b) => b.addEventListener("click", () => pickMoment(+b.dataset.j)));
+$("btnA").onclick = () => pickTrain("A"); $("btnB").onclick = () => pickTrain("B");
+
+// playback
+let last = 0, accMin = 0;
+function stop() { state.playing = false; $("play").textContent = "Play"; }
+function tick(ts) {
+  if (!state.playing) return;
+  const dt = last ? Math.min(0.1, (ts - last) / 1000) : 0; last = ts;
+  accMin += dt * state.speed * 60;
+  const d = U[state.u]; let moved = false;
+  while (state.i < d.mins.length - 1 && d.mins[state.i + 1] - d.mins[state.i] <= accMin) { accMin -= d.mins[state.i + 1] - d.mins[state.i]; state.i++; moved = true; }
+  if (state.i >= d.mins.length - 1) { stop(); }
+  if (state.i > state.b) { const span = state.b - state.a; state.a = state.i; state.b = Math.min(d.mins.length - 1, state.i + span); }
+  if (moved) render();
+  requestAnimationFrame(tick);
+}
+$("play").onclick = () => {
+  if (state.playing) { stop(); return; }
+  if (state.i >= state.b) state.i = state.a;
+  state.playing = true; $("play").textContent = "Pause"; last = 0; accMin = 0; requestAnimationFrame(tick);
+};
+document.querySelectorAll("[data-speed]").forEach((b) => b.addEventListener("click", () => {
+  state.speed = +b.dataset.speed;
+  document.querySelectorAll("[data-speed]").forEach((x) => x.setAttribute("aria-pressed", x === b));
+}));
+// scrubbing
+function scrub(ev) {
+  const r = $("tl").getBoundingClientRect(), d = U[state.u];
+  const f = Math.max(0, Math.min(1, (ev.clientX - r.left - PAD.l) / (r.width - PAD.l - PAD.r)));
+  state.i = idxAt(state.u, d.mins[state.a] + f * (d.mins[state.b] - d.mins[state.a])); render();
+}
+let drag = false;
+$("tl").addEventListener("pointerdown", (e) => { drag = true; $("tl").setPointerCapture(e.pointerId); scrub(e); });
+$("tl").addEventListener("pointermove", (e) => { if (drag) scrub(e); });
+$("tl").addEventListener("pointerup", () => { drag = false; });
+$("tl").addEventListener("keydown", (e) => {
+  const n = e.shiftKey ? 12 : 1;
+  if (e.key === "ArrowRight") { state.i = Math.min(state.b, state.i + n); render(); e.preventDefault(); }
+  if (e.key === "ArrowLeft") { state.i = Math.max(state.a, state.i - n); render(); e.preventDefault(); }
+});
+$("ov").addEventListener("click", (e) => {
+  const r = $("ov").getBoundingClientRect(), d = U[state.u], M = d.mins[d.mins.length - 1];
+  const f = Math.max(0, Math.min(1, (e.clientX - r.left - PAD.l) / (r.width - PAD.l - PAD.r)));
+  const m = f * M, half = 36 * 60;
+  state.a = idxAt(state.u, Math.max(0, m - half)); state.b = idxAt(state.u, Math.min(M, m + half)); state.i = idxAt(state.u, m);
+  $("story").innerHTML = `<b>Free exploration.</b>Showing three days around ${fmt(state.u, m, true)}. Press Play or drag on the timeline.`;
+  document.querySelectorAll(".moment").forEach((b) => b.setAttribute("aria-pressed", false));
+  render();
+});
+window.addEventListener("resize", () => { if (!$("sheet").hidden) { drawTL(); drawOV(); } });
+
+// injection panel
+const DET = { isolation_forest: "Isolation Forest", autoencoder: "Autoencoder", regime_forecaster: "Regime forecaster" };
+function renderInj() {
+  const s = +$("sev").value, sev = DATA.injSev[s];
+  $("sevv").textContent = sev === 0 ? "0× (no leak)" : sev + "×";
+  $("sevnote").textContent = sev === 0
+    ? "Control: no leak was added, so any detection would be a false alarm. None of the nine configurations alarmed."
+    : `Share of the 12 test days where each configuration raised an alarm after a ${sev}× leak was added.`;
+  const keys = Object.keys(DATA.inj).sort((a, b) => DATA.inj[b][s] - DATA.inj[a][s] || a.localeCompare(b));
+  $("injrows").innerHTML = keys.map((key) => {
+    const [det, fs] = key.split("|"), v = DATA.inj[key][s];
+    return `<div class="row"><span>${DET[det]} · ${fs}</span><div class="track"><i class="f-${fs}" style="width:${(v * 100).toFixed(0)}%"></i></div><span class="v">${Math.round(v * 100)}%</span></div>`;
+  }).join("");
+}
+$("sev").addEventListener("input", renderInj);
+renderInj();
+pickMoment(0);
+
+// network map
+const STATIONS = [["Póvoa de Varzim", 90, 70, 0, 22], ["Senhora da Hora", 330, 200, 1, -14], ["Trindade", 520, 300, 1, -14], ["Estádio do Dragão", 840, 300, 0, 26],
+  ["Fânzeres", 930, 170, 0, -14], ["Hospital São João", 520, 50, 0, -14], ["Santo Ovídio", 520, 520, 0, 26], ["Aeroporto", 130, 400, 0, 26], ["Campanhã", 820, 450, 0, 26],
+  ["Casa da Música", 425, 250, 0, -14], ["Câmara de Matosinhos", 230, 300, 0, 26], ["Bolhão", 680, 300, 0, -14], ["Heroísmo", 640, 410, 0, 26]];
+$("stations").innerHTML = STATIONS.map(([n, x, y, hub, dy]) =>
+  `<circle class="st${hub ? " hub" : ""}" cx="${x}" cy="${y}" r="${hub ? 10 : 7}"/><text class="stn${hub ? " hub" : ""}" x="${x}" y="${y + dy}" text-anchor="middle">${n}</text>`).join("");
+const NETTRAINS = [
+  { id: "A", line: "L1", t: 0.30, v: 0.022, loop: ["2020-07-14T22:00", "2020-07-15T20:00"] },
+  { id: "B", line: "L2", t: 0.62, v: -0.03, loop: ["2022-07-13T08:00", "2022-07-14T12:00"] },
+  { id: "C", line: "L3", t: 0.2, v: 0.035 },
+  { id: "D", line: "L4", t: 0.7, v: -0.028 },
+  { id: "E", line: "L1", t: 0.85, v: -0.018 },
+];
+const pos = {};
+for (const tr of NETTRAINS) {
+  tr.path = $(tr.line); tr.len = tr.path.getTotalLength();
+  if (tr.loop) { tr.lo = idxAt(tr.id, minOf(tr.id, tr.loop[0])); tr.hi = idxAt(tr.id, minOf(tr.id, tr.loop[1])); pos[tr.id] = tr.lo; }
+}
+$("trains").innerHTML = NETTRAINS.map((tr) => {
+  const live = !!tr.loop;
+  return `<g class="tr${live ? "" : " idle"}" id="tr-${tr.id}" ${live ? `tabindex="0" role="button" aria-label="Open the health monitor for Train ${tr.id}"` : 'aria-label="Train with no sensor data"'}>
+    <circle class="halo" r="18"/><rect class="body" x="-24" y="-13" width="48" height="26" rx="8"/><text text-anchor="middle" y="5">${live ? tr.id : "·"}</text><text class="stopped" text-anchor="middle" y="-20">HELD</text></g>`;
+}).join("");
+const FLEETMETA = { A: "MetroPT-3 · 2020", B: "MetroPT2 · 2022" };
+function renderFleet() {
+  $("fleet").innerHTML = NETTRAINS.filter((t) => t.loop).map((tr) => {
+    const k = tr.id, i = pos[k], st = status(k, i), [day, time] = fmt(k, U[k].mins[i]), m = U[k].mins[i];
+    const ev = U[k].ev.find((e) => m >= e.s && m <= e.e);
+    const move = st === "alarm" ? "Held: alarm sent to depot" : st === "watch" ? "Running slowly: on watch" : "Running";
+    return `<button class="tcard" data-k="${k}"><div class="top"><b>Train ${k}</b><span class="pill ${st}">${LABEL[st]}</span></div>
+      <span class="meta">${FLEETMETA[k]} · recorded ${day.slice(4)}, ${time}</span><span class="meta" style="color:var(--fg)">${move}</span>
+      ${ev ? `<span class="ev">Reported failure in progress: ${ev.id} ${ev.kind}</span>` : ""}<span class="go">Open health monitor →</span></button>`;
+  }).join("") + `<p class="note" style="margin:0">Trains C, D and E are shown for context only. The datasets have no sensor data for them.</p>`;
+  document.querySelectorAll(".tcard").forEach((b) => b.addEventListener("click", () => openTrain(b.dataset.k)));
+}
+let netPlaying = !window.matchMedia("(prefers-reduced-motion: reduce)").matches, netLast = 0, fleetT = 0;
+const MOVE = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function netFrame(ts) {
+  const dt = netLast ? Math.min(0.1, (ts - netLast) / 1000) : 0; netLast = ts;
+  if (!$("sheet").hidden) { requestAnimationFrame(netFrame); return; }
+  for (const tr of NETTRAINS) {
+    const st = tr.loop ? status(tr.id, pos[tr.id]) : "ok";
+    const factor = st === "alarm" ? 0 : st === "watch" ? 0.35 : 1;      // held while in alarm, slower on watch
+    if (MOVE) { tr.t += tr.v * dt * factor; if (tr.t > 1) { tr.t = 1; tr.v = -tr.v; } if (tr.t < 0) { tr.t = 0; tr.v = -tr.v; } }
+    const p = tr.path.getPointAtLength(tr.t * tr.len);
+    $("tr-" + tr.id).setAttribute("transform", `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`);
+  }
+  if (netPlaying) {
+    for (const tr of NETTRAINS) {
+      if (!tr.loop) continue;
+      tr.acc = (tr.acc || 0) + dt * 60;                     // 1 recorded hour per second
+      const d = U[tr.id]; let i = pos[tr.id];
+      while (i < tr.hi && d.mins[i + 1] - d.mins[i] <= tr.acc) { tr.acc -= d.mins[i + 1] - d.mins[i]; i++; }
+      pos[tr.id] = i >= tr.hi ? tr.lo : i;
+    }
+  }
+  for (const tr of NETTRAINS) if (tr.loop) {
+    const st = status(tr.id, pos[tr.id]);
+    $("tr-" + tr.id).setAttribute("class", "tr s-" + st + (st === "alarm" ? " halted" : ""));
+    if (st !== tr.prev) { if (st === "alarm" || st === "sensor") notify(tr.id, st, pos[tr.id]); tr.prev = st; }
+  }
+  fleetT += dt; if (fleetT > 0.25 || !netLast) { fleetT = 0; renderFleet(); }
+  requestAnimationFrame(netFrame);
+}
+$("netplay").textContent = netPlaying ? "Pause replay" : "Play replay";
+$("netplay").setAttribute("aria-pressed", netPlaying);
+$("netplay").onclick = () => { netPlaying = !netPlaying; $("netplay").textContent = netPlaying ? "Pause replay" : "Play replay"; $("netplay").setAttribute("aria-pressed", netPlaying); };
+for (const tr of NETTRAINS) if (tr.loop) {
+  const g = $("tr-" + tr.id);
+  g.addEventListener("click", () => openTrain(tr.id));
+  g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openTrain(tr.id); } });
+}
+function openTrain(k) {
+  stop(); setUnit(k);
+  const d = U[k], i = pos[k];
+  state.i = i; state.a = idxAt(k, d.mins[i] - 24 * 60); state.b = idxAt(k, d.mins[i] + 12 * 60);
+  document.querySelectorAll(".moment").forEach((b) => b.setAttribute("aria-pressed", false));
+  const [day, time] = fmt(k, d.mins[i]);
+  $("story").innerHTML = `<b>Train ${k}, ${day}, ${time}.</b>This is the moment the train was at when you clicked it. Press Play to continue the recording, or pick a demo moment below.`;
+  $("sheet").hidden = false; document.body.style.overflow = "hidden"; $("sheet").scrollTop = 0;
+  render(); $("closesheet").focus();
+}
+function closeSheet() {
+  stop(); $("sheet").hidden = true; document.body.style.overflow = "";
+  netLast = 0;
+}
+
+// depot desk
+const PARTOF = (k, i) => { const w = U[k].W[i]; return NICE[DATA.feats[Math.floor(w / 196)]][1]; };
+const sigs = (k, i) => { const w = U[k].W[i]; return [Math.floor(w / 196), Math.floor(w / 14) % 14, w % 14].map((j) => NICE[DATA.feats[j]][0]); };
+const EPIS = [];
+for (const k of ["A", "B"]) {
+  const d = U[k]; let cur = null;
+  for (let j = 0; j < d.mins.length; j++) {
+    if (!d.A[j]) continue;
+    if (cur && d.mins[j] - d.mins[cur.e] <= 60) { cur.e = j; continue; }
+    cur = { k, s: j, e: j }; EPIS.push(cur);
+  }
+}
+for (const ep of EPIS) {
+  const d = U[ep.k], ms = d.mins[ep.s], cnt = {};
+  for (let j = ep.s; j <= ep.e; j++) if (d.A[j]) { const p = PARTOF(ep.k, j); cnt[p] = (cnt[p] || 0) + 1; }
+  ep.part = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a])[0];
+  ep.len = d.mins[ep.e] - ms + 5;
+  ep.oc = "none"; ep.txt = "No reported failure";
+  for (const e of d.ev) {
+    if (ms >= e.s - 1440 && ms < e.s) { ep.oc = "before"; ep.txt = `${((e.s - ms) / 60).toFixed(1)} h before ${e.id}`; break; }
+    if (ms >= e.s && ms <= e.e) { ep.oc = "during"; ep.txt = `During ${e.id}`; break; }
+    if (ms > e.e && ms <= e.e + 1440) { ep.oc = "after"; ep.txt = `After ${e.id}`; }
+  }
+}
+function histSummary() {
+  return ["A", "B"].map((k) => {
+    const E = EPIS.filter((e) => e.k === k), c = (o) => E.filter((e) => e.oc === o).length;
+    return `Train ${k}: ${E.length} alarms, ${c("before")} before a reported failure, ${c("during")} during one, ${c("none")} with no reported failure nearby.`;
+  }).join(" ");
+}
+$("histsum").textContent = histSummary();
+let histFilter = "all";
+function durTxt(m) { return m < 60 ? `${m} min` : `${(m / 60).toFixed(1)} h`; }
+function renderHist() {
+  const rows = EPIS.filter((e) => histFilter === "all" || e.k === histFilter || e.oc === histFilter);
+  $("hist").innerHTML = rows.map((e) => {
+    const [day, time] = fmt(e.k, U[e.k].mins[e.s]);
+    return `<tr class="rowlink" data-k="${e.k}" data-i="${e.s}" tabindex="0"><td>Train ${e.k}</td><td class="num">${day.slice(4)} ${time}</td><td class="num">${durTxt(e.len)}</td><td>${PARTNAME[e.part]}</td><td><span class="oc ${e.oc}">${e.txt}</span></td></tr>`;
+  }).join("");
+  document.querySelectorAll("#hist tr").forEach((r) => {
+    const go = () => openAt(r.dataset.k, +r.dataset.i);
+    r.addEventListener("click", go); r.addEventListener("keydown", (ev) => { if (ev.key === "Enter") go(); });
+  });
+}
+document.querySelectorAll(".chip").forEach((c) => c.addEventListener("click", () => {
+  histFilter = c.dataset.f; document.querySelectorAll(".chip").forEach((x) => x.setAttribute("aria-pressed", x === c)); renderHist();
+}));
+renderHist();
+
+const INBOX = []; const seen = new Set();
+function nextNight(k, m) {                       // next 01:00 depot window after minute m
+  const t = new Date(U[k].t0ms + m * 60000); const n = new Date(t); n.setUTCHours(1, 0, 0, 0);
+  if (n <= t) n.setUTCDate(n.getUTCDate() + 1);
+  return `01:00 ${DAYS[n.getUTCDay()]} ${n.getUTCDate()} ${MON[n.getUTCMonth()]}`;
+}
+function notify(k, st, i) {
+  const d = U[k];
+  let key = k + st + i;
+  if (st === "alarm") { const ep = EPIS.find((e) => e.k === k && i >= e.s && i <= e.e); if (ep) key = k + "ep" + ep.s; }
+  if (st === "sensor") { let j = i; while (j > 0 && !d.S[j - 1]) j--; key = k + "sc" + j; }
+  if (seen.has(key)) return; seen.add(key);
+  const [day, time] = fmt(k, d.mins[i]);
+  const item = { id: key, k, st, i, when: `${time}, ${day}`, state: "new", part: st === "alarm" ? PARTOF(k, i) : null, sig: st === "alarm" ? sigs(k, i) : [], night: nextNight(k, d.mins[i]) };
+  INBOX.unshift(item); renderInbox();
+  if (st === "alarm") showToast(item);
+}
+function renderInbox() {
+  const n = INBOX.filter((a) => a.state === "new").length;
+  $("badge").textContent = n; $("badge").hidden = n === 0;
+  $("k-new").textContent = n;
+  $("k-ack").textContent = INBOX.filter((a) => a.state !== "new").length;
+  $("k-book").textContent = INBOX.filter((a) => a.state === "booked").length;
+  if (!INBOX.length) {
+    $("inbox").innerHTML = `<div class="empty">No alerts yet in this replay. Train A's recording reaches its alarm at 04:11 on 15 July 2020, about six seconds after the replay starts. Leave the replay running and the alert will appear here.</div>`;
+    return;
+  }
+  $("inbox").innerHTML = INBOX.map((a) => a.st === "alarm" ? `
+    <div class="alert${a.state === "new" ? "" : " done"}">
+      <div class="h"><b>Train ${a.k} · ${PARTNAME[a.part]} alarm</b><span class="t">${a.when}</span></div>
+      <div class="sig">Unusual: ${a.sig.join(", ")}.</div>
+      ${a.state === "booked" ? `<span class="st8">REPAIR BOOKED · ${a.night}</span>` : a.state === "ack" ? `<span class="st8">ACKNOWLEDGED</span>` : ""}
+      <div class="acts">
+        ${a.state === "new" ? `<button class="btn" data-act="ack" data-id="${a.id}">Acknowledge</button>` : ""}
+        ${a.state !== "booked" ? `<button class="btn" data-act="book" data-id="${a.id}">Book overnight repair (${a.night})</button>` : ""}
+        <button class="btn" data-act="open" data-id="${a.id}">Open monitor</button>
+      </div>
+    </div>` : `
+    <div class="alert sensor${a.state === "new" ? "" : " done"}">
+      <div class="h"><b>Train ${a.k} · sensor check</b><span class="t">${a.when}</span></div>
+      <div class="sig">Sensor readings are frozen or impossible. The model has paused judging this train, so no alarm can be raised until the data logger recovers.</div>
+      ${a.state !== "new" ? `<span class="st8">ACKNOWLEDGED</span>` : ""}
+      <div class="acts">${a.state === "new" ? `<button class="btn" data-act="ack" data-id="${a.id}">Acknowledge</button>` : ""}<button class="btn" data-act="open" data-id="${a.id}">Open monitor</button></div>
+    </div>`).join("");
+  document.querySelectorAll("#inbox [data-act]").forEach((b) => b.addEventListener("click", () => {
+    const a = INBOX.find((x) => x.id === b.dataset.id);
+    if (b.dataset.act === "ack") a.state = "ack";
+    if (b.dataset.act === "book") a.state = "booked";
+    if (b.dataset.act === "open") { openAt(a.k, a.i); return; }
+    renderInbox();
+  }));
+}
+renderInbox();
+let toastTimer = 0;
+function showToast(a) {
+  if (!$("view-network").hidden && $("sheet").hidden) {
+    $("toastt").textContent = "Depot notified";
+    $("toastm").textContent = `Train ${a.k} alarm at ${a.when.split(",")[0]}: ${PARTNAME[a.part].toLowerCase()} behaving unusually. Train held.`;
+    $("toast").hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { $("toast").hidden = true; }, 7000);
+  }
+}
+$("toastx").onclick = () => { $("toast").hidden = true; };
+$("toastgo").onclick = () => { $("toast").hidden = true; showTab("depot"); };
+function showTab(t) {
+  const dep = t === "depot";
+  $("view-network").hidden = dep; $("view-depot").hidden = !dep;
+  $("tab-network").setAttribute("aria-selected", !dep); $("tab-depot").setAttribute("aria-selected", dep);
+  if (dep) $("toast").hidden = true;
+  try { history.replaceState(null, "", "#" + (dep ? "depot" : "network")); } catch (e) {}
+}
+$("tab-network").onclick = () => showTab("network"); $("tab-depot").onclick = () => showTab("depot");
+if (location.hash === "#depot") showTab("depot");
+function openAt(k, i) {
+  stop(); setUnit(k);
+  const d = U[k];
+  state.i = i; state.a = idxAt(k, d.mins[i] - 24 * 60); state.b = idxAt(k, d.mins[i] + 12 * 60);
+  document.querySelectorAll(".moment").forEach((b) => b.setAttribute("aria-pressed", false));
+  const [day, time] = fmt(k, d.mins[i]);
+  $("story").innerHTML = `<b>Train ${k}, ${day}, ${time}.</b>Opened from the depot desk. Press Play to see what happened next, or pick a demo moment below.`;
+  $("sheet").hidden = false; document.body.style.overflow = "hidden"; $("sheet").scrollTop = 0;
+  render(); $("closesheet").focus();
+}
+
+$("closesheet").onclick = closeSheet;
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("sheet").hidden) closeSheet(); });
+requestAnimationFrame(netFrame);
+</script>
