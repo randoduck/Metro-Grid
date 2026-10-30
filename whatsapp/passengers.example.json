@@ -1,7 +1,0 @@
-{
-  "sender": "+919999999999",
-  "allowed_origins": ["https://metrogrid-plum.vercel.app"],
-  "passengers": [
-    { "name": "Passenger 1", "phone": "+919888888888" }
-  ]
-}
