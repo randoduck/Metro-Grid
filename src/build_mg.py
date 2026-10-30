@@ -473,6 +473,10 @@ rep('story: "There was no warning before A-E3, but once the leak develops the al
     'story: "A-E3 was an air leak. The model did not spot it beforehand, but while the leak was happening the train went red and stayed red for hours. Look at the parts that light up: the compressor is pumping far longer than usual and the air tank is slow to refill. That is what you would expect when air is escaping, because the compressor has to work overtime to keep up." },')
 
 
+# v7: Model tab hidden at ish's request (the view stays in the page, unreachable)
+rep('<button class="tab" role="tab" id="tab-model" aria-selected="false" aria-controls="view-model">Model</button>', '<button class="tab" role="tab" id="tab-model" aria-selected="false" aria-controls="view-model" hidden>Model</button>')
+rep('showTab(["#depot", "#model"].includes(location.hash) ? location.hash.slice(1) : "network");', 'showTab(location.hash === "#depot" ? "depot" : "network");')
+
 # main script end: close startApp and append the new app code
 tail = s[s.rindex("requestAnimationFrame(netFrame);\n</script>"):]
 APPJS = (HERE / "mg_app.js").read_text()

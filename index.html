@@ -316,7 +316,7 @@ footer p { margin: 0 0 6px; max-width: 110ch; }
   <div class="tabs" role="tablist" aria-label="Views">
     <button class="tab" role="tab" id="tab-network" aria-selected="true" aria-controls="view-network">Network</button>
     <button class="tab" role="tab" id="tab-depot" aria-selected="false" aria-controls="view-depot">Depot desk <span class="badge" id="badge" hidden>0</span></button>
-    <button class="tab" role="tab" id="tab-model" aria-selected="false" aria-controls="view-model">Model</button>
+    <button class="tab" role="tab" id="tab-model" aria-selected="false" aria-controls="view-model" hidden>Model</button>
   </div>
   <div class="appbar-r">
     <button class="btn" id="netplay" aria-pressed="true">Pause replay</button>
@@ -1406,7 +1406,7 @@ function showTab(t) {
   try { history.replaceState(null, "", "#" + t); } catch (e) {}
 }
 for (const v of ["network", "depot", "model"]) $("tab-" + v).onclick = () => showTab(v);
-showTab(["#depot", "#model"].includes(location.hash) ? location.hash.slice(1) : "network");
+showTab(location.hash === "#depot" ? "depot" : "network");
 function openAt(k, i, msg) {
   stop(); setUnit(k);
   const d = U[k];
