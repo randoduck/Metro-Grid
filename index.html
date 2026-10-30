@@ -1503,7 +1503,7 @@ $("addsample").onclick = async () => {
   try {
     addBuf = BUFS.B ? BUFS.B.slice(0) : unb64(await (await fetch("data/train_B.gz.b64.txt")).arrayBuffer());
     addLabel = "train_B_features.csv.gz";
-    $("addfilename").textContent = "Sample: Train B's real export from the notebook (MetroPT2, 2022), run again as a new train.";
+    $("addfilename").textContent = "Sample file loaded.";
   } catch (e) { $("addfilename").textContent = "Could not load the sample file."; }
 };
 document.querySelectorAll('input[name="per"]').forEach((r) => r.addEventListener("change", () => { $("perdates").hidden = !document.querySelector('input[name="per"][value="dates"]').checked; }));
